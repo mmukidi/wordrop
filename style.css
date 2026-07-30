@@ -243,21 +243,56 @@ body {
     background: rgba(10, 10, 14, 0.95);
     border: 2px solid var(--border-glow);
     box-shadow: 0 0 30px rgba(0, 240, 255, 0.08), inset 0 0 25px rgba(0, 0, 0, 0.85);
-    border-radius: 12px 12px 0 0;
+    border-radius: 12px;
     overflow: hidden;
 }
 
-/* Simple Clean Glass Floor Bar (0% Tile Overlap) */
-.broken-glass-floor {
+/* Tile Matrix Container (Leaves bottom 24px for zero-clipping floor bar) */
+.tile-matrix {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    height: 12px;
-    pointer-events: none;
+    height: calc(100% - 24px);
+}
+
+/* Thick Solid Cyberpunk Floor Bar (100% Tile Visibility) */
+.thick-floor-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 24px;
+    background: linear-gradient(to bottom, rgba(0, 240, 255, 0.4), rgba(15, 15, 25, 0.98));
+    border-top: 3px solid var(--neon-cyan);
+    box-shadow: 0 -4px 20px rgba(0, 240, 255, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
     z-index: 10;
-    background: linear-gradient(to bottom, rgba(0, 240, 255, 0.5), rgba(15, 15, 25, 0.95));
-    border-top: 2.5px solid var(--neon-cyan);
-    box-shadow: 0 4px 15px rgba(0, 240, 255, 0.5);
-    border-radius: 0 0 10px 10px;
-    position: relative;
+}
+
+.floor-hazard-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    color: rgba(0, 240, 255, 0.85);
+    text-shadow: 0 0 6px rgba(0, 240, 255, 0.5);
+}
+
+.timer-countdown {
+    color: var(--neon-cyan);
+    font-family: 'Outfit', sans-serif;
+    font-weight: 900;
+    font-size: 11px;
+    margin-left: 4px;
+    text-shadow: 0 0 6px rgba(0, 240, 255, 0.4);
+}
+
+.vortex-btn {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.25) 0%, rgba(245, 158, 11, 0.25) 100%) !important;
+    border-color: rgba(239, 68, 68, 0.5) !important;
 }
 
 /* Grid Gridlines Backdrop */

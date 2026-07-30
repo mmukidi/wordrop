@@ -58,14 +58,18 @@ let activeMatches = []; // Words currently highlighted on grid
 
 // DOM Elements
 const boardEl = document.getElementById("game-board");
+const tileMatrixEl = document.getElementById("tile-matrix") || boardEl;
 const scoreValEl = document.getElementById("score-val");
 const highScoreValEl = document.getElementById("high-score-val");
 const levelValEl = document.getElementById("level-val");
 const timerBarEl = document.getElementById("timer-bar");
+const timerCountdownEl = document.getElementById("timer-countdown-val");
 
 const btnShuffle = document.getElementById("btn-shuffle");
 const shuffleCooldownEl = document.getElementById("shuffle-cooldown");
 const btnHint = document.getElementById("btn-hint");
+const btnVortex = document.getElementById("btn-vortex");
+const btnStats = document.getElementById("btn-stats");
 const btnPause = document.getElementById("btn-pause");
 const btnSound = document.getElementById("btn-sound");
 const btnRestart = document.getElementById("btn-restart");
@@ -74,7 +78,7 @@ const btnRestart = document.getElementById("btn-restart");
 const lastWordTextEl = document.getElementById("last-word-text");
 const lastWordScoreEl = document.getElementById("last-word-score");
 
-// Overlays
+// Overlays & Modals
 const pauseOverlay = document.getElementById("pause-overlay");
 const btnResume = document.getElementById("btn-resume");
 const gameOverOverlay = document.getElementById("game-over-overlay");
@@ -82,6 +86,17 @@ const finalScoreEl = document.getElementById("final-score");
 const finalLevelEl = document.getElementById("final-level");
 const finalWordsCountEl = document.getElementById("final-words-count");
 const btnPlayAgain = document.getElementById("btn-play-again");
+
+const statsOverlay = document.getElementById("stats-overlay");
+const btnCloseStats = document.getElementById("btn-close-stats");
+const statsWordsCountEl = document.getElementById("stats-words-count");
+const statsLongestWordEl = document.getElementById("stats-longest-word");
+const statsRareCountEl = document.getElementById("stats-rare-count");
+const statsHighScoreEl = document.getElementById("stats-high-score");
+
+// Gamer Stats Tracking
+let longestWordSpelled = "—";
+let rareTilesClearedCount = 0;
 
 // Badges / Notifications
 const comboBadge = document.getElementById("combo-badge");
@@ -180,6 +195,9 @@ function setupEventListeners() {
 
     btnShuffle.addEventListener("click", triggerShuffle);
     btnHint.addEventListener("click", triggerHint);
+    if (btnVortex) btnVortex.addEventListener("click", triggerVortex);
+    if (btnStats) btnStats.addEventListener("click", openStatsModal);
+    if (btnCloseStats) btnCloseStats.addEventListener("click", closeStatsModal);
 
     // Board Touch/Mouse Swipe Interaction
     boardEl.addEventListener("pointerdown", onPointerDown);
@@ -269,7 +287,7 @@ function spawnTile(x, y, forcedLetter = null) {
         </div>
     `;
 
-    boardEl.appendChild(tileEl);
+    tileMatrixEl.appendChild(tileEl);
 
     // Save in matrix
     grid[y][x] = {
@@ -808,7 +826,70 @@ function applyGravity() {
     return cascaded;
 }
 
-/* --- Rising Grid Mechanic --- */
+/* --- Rising Grid Mechanic & Gamer Power-Ups --- */
+
+function triggerVortex() {
+    if (!isPlaying || isPaused || isBoardLocked) return;
+
+    if (score < 25) {
+        showWordClearPopup("NEED 25 PTS FOR VORTEX!", { el: boardEl });
+        audio.playClick();
+        return;
+    }
+
+    // Check if bottom row (y=0) has any tiles
+    let hasBottomTiles = false;
+    for (let x = 0; x < GRID_COLS; x++) {
+        if (grid[0][x] !== null) {
+            hasBottomTiles = true;
+            break;
+        }
+    }
+
+    if (!hasBottomTiles) {
+        showWordClearPopup("BOTTOM ROW EMPTY!", { el: boardEl });
+        audio.playClick();
+        return;
+    }
+
+    // Deduct 25 pts
+    updateScore(-25);
+    audio.playSlash();
+    audio.playBurstPop();
+    triggerScreenShake();
+
+    // Vaporize bottom row (y=0)
+    for (let x = 0; x < GRID_COLS; x++) {
+        const tile = grid[0][x];
+        if (tile && tile.el) {
+            spawnTileSparks(tile);
+            grid[0][x] = null;
+            tile.el.remove();
+        }
+    }
+
+    showWordClearPopup("🔥 VORTEX CLEAR!", { el: boardEl });
+
+    // Apply gravity
+    setTimeout(async () => {
+        applyGravity();
+        await resolveBoardCascades();
+    }, 250);
+}
+
+function openStatsModal() {
+    audio.playClick();
+    if (statsWordsCountEl) statsWordsCountEl.textContent = wordsClearedCount;
+    if (statsLongestWordEl) statsLongestWordEl.textContent = longestWordSpelled.toUpperCase();
+    if (statsRareCountEl) statsRareCountEl.textContent = rareTilesClearedCount;
+    if (statsHighScoreEl) statsHighScoreEl.textContent = formatScore(highScore);
+    if (statsOverlay) statsOverlay.classList.remove("hidden");
+}
+
+function closeStatsModal() {
+    audio.playClick();
+    if (statsOverlay) statsOverlay.classList.add("hidden");
+}
 
 function startRiseTimer() {
     if (riseTimerInterval) clearInterval(riseTimerInterval);
@@ -816,7 +897,7 @@ function startRiseTimer() {
     riseTimerInterval = setInterval(() => {
         if (!isPlaying || isPaused || isBoardLocked) return;
 
-        const duration = LEVEL_SPEEDS[level] || 3.0;
+        const duration = LEVEL_SPEEDS[level] || 15.0;
         // Increment progress (ticks every 100ms)
         riseProgress += (100 / (duration * 10));
 
@@ -826,6 +907,10 @@ function startRiseTimer() {
         }
 
         timerBarEl.style.width = `${Math.min(100, riseProgress)}%`;
+
+        // Update digital countdown timer
+        const remainingSecs = Math.max(0, Math.ceil(duration * (1 - riseProgress / 100)));
+        if (timerCountdownEl) timerCountdownEl.textContent = `${remainingSecs}s`;
     }, 100);
 }
 
