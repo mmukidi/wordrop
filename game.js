@@ -35,15 +35,22 @@ let tileIdCounter = 0;
 let riseProgress = 0; // 0 to 100
 let riseTimerInterval = null;
 const LEVEL_SPEEDS = {
-    1: 22.0, // 22 seconds per row (relaxed starting pace for Level 1)
-    2: 16.0,
-    3: 12.0,
-    4: 9.0,
-    5: 7.0,
-    6: 5.5,
-    7: 4.0,
-    8: 3.0
+    1: 15.0, // Level 1: 15s per row
+    2: 12.0, // Level 2: 12s per row (-3s)
+    3: 9.0,  // Level 3: 9s per row (-3s)
+    4: 6.0,  // Level 4: 6s per row (-3s)
+    5: 4.5,  // Level 5: 4.5s per row
+    6: 3.5,  // Level 6: 3.5s per row
+    7: 3.0,  // Level 7: 3.0s per row
+    8: 2.5,  // Level 8: 2.5s per row
+    9: 2.0,  // Level 9: 2.0s per row
+    10: 1.5  // Level 10: 1.5s per row (HARD MODE!)
 };
+
+function getLevelMultiplier(lvl) {
+    // Level 1 = 1.0x, Level 2 = 1.5x (+50%), Level 3 = 2.0x (+100%), Level 4 = 2.5x (+150%)...
+    return 1 + (lvl - 1) * 0.5;
+}
 
 // Powerups state
 let shuffleCooldownActive = false;
@@ -80,6 +87,10 @@ const lastWordTextEl = document.getElementById("last-word-text");
 const lastWordScoreEl = document.getElementById("last-word-score");
 
 // Overlays & Modals
+const levelBtn = document.getElementById("level-btn");
+const levelSelectOverlay = document.getElementById("level-select-overlay");
+const btnCloseLevelSelect = document.getElementById("btn-close-level-select");
+
 const pauseOverlay = document.getElementById("pause-overlay");
 const btnResume = document.getElementById("btn-resume");
 const gameOverOverlay = document.getElementById("game-over-overlay");
@@ -196,6 +207,16 @@ function setupEventListeners() {
         audio.playClick();
     });
 
+    if (levelBtn) levelBtn.addEventListener("click", openLevelSelectModal);
+    if (btnCloseLevelSelect) btnCloseLevelSelect.addEventListener("click", closeLevelSelectModal);
+
+    document.querySelectorAll(".level-select-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            const chosenLvl = e.currentTarget.dataset.lvl;
+            selectLevel(chosenLvl);
+        });
+    });
+
     btnShuffle.addEventListener("click", triggerShuffle);
     btnHint.addEventListener("click", triggerHint);
     if (btnVortex) btnVortex.addEventListener("click", triggerVortex);
@@ -209,6 +230,37 @@ function setupEventListeners() {
     boardEl.addEventListener("pointermove", onPointerMove);
     boardEl.addEventListener("pointerup", onPointerUp);
     boardEl.addEventListener("pointercancel", onPointerUp);
+}
+
+function openLevelSelectModal() {
+    audio.playClick();
+    if (levelSelectOverlay) levelSelectOverlay.classList.remove("hidden");
+}
+
+function closeLevelSelectModal() {
+    audio.playClick();
+    if (levelSelectOverlay) levelSelectOverlay.classList.add("hidden");
+}
+
+function selectLevel(targetLvl) {
+    level = parseInt(targetLvl) || 1;
+    levelValEl.textContent = level;
+    
+    document.querySelectorAll(".level-select-btn").forEach(btn => {
+        if (parseInt(btn.dataset.lvl) === level) {
+            btn.classList.add("active");
+        } else {
+            btn.classList.remove("active");
+        }
+    });
+
+    audio.playLevelUp();
+    showWordClearPopup(`LEVEL ${level} SELECTED!`, { el: boardEl });
+
+    riseProgress = 0;
+    if (timerBarEl) timerBarEl.style.width = "0%";
+    startRiseTimer();
+    closeLevelSelectModal();
 }
 
 function openInfoModal() {

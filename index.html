@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260729_2326">
+    <link rel="stylesheet" href="style.css?v=20260729_2330">
 </head>
 <body>
     <div class="game-wrapper">
@@ -16,7 +16,7 @@
         <header class="game-header">
             <div class="brand">
                 <h1 class="game-title">WORDROP</h1>
-                <div class="level-indicator">LEVEL <span id="level-val">1</span></div>
+                <div class="level-indicator clickable" id="level-btn" title="Select Level (1-10)">LEVEL <span id="level-val">1</span> ▼</div>
             </div>
             <div class="stats">
                 <div class="stat-box">
@@ -162,6 +162,59 @@
         </div>
     </div>
 
+    <!-- Level Selector Modal Overlay (Levels 1 to 10) -->
+    <div id="level-select-overlay" class="overlay hidden">
+        <div class="overlay-content level-select-content">
+            <h2>🎯 SELECT LEVEL</h2>
+            <p>Higher levels rise 3s faster but award +50% more points per word!</p>
+            
+            <div class="level-grid">
+                <button class="level-select-btn active" data-lvl="1">
+                    <span class="lvl-title">LVL 1</span>
+                    <span class="lvl-detail">15s • 1.0x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="2">
+                    <span class="lvl-title">LVL 2</span>
+                    <span class="lvl-detail">12s • 1.5x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="3">
+                    <span class="lvl-title">LVL 3</span>
+                    <span class="lvl-detail">9s • 2.0x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="4">
+                    <span class="lvl-title">LVL 4</span>
+                    <span class="lvl-detail">6s • 2.5x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="5">
+                    <span class="lvl-title">LVL 5</span>
+                    <span class="lvl-detail">4.5s • 3.0x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="6">
+                    <span class="lvl-title">LVL 6</span>
+                    <span class="lvl-detail">3.5s • 3.5x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="7">
+                    <span class="lvl-title">LVL 7</span>
+                    <span class="lvl-detail">3.0s • 4.0x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="8">
+                    <span class="lvl-title">LVL 8</span>
+                    <span class="lvl-detail">2.5s • 4.5x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="9">
+                    <span class="lvl-title">LVL 9</span>
+                    <span class="lvl-detail">2.0s • 5.0x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="10">
+                    <span class="lvl-title">LVL 10 🔥</span>
+                    <span class="lvl-detail">1.5s • 5.5x Pts</span>
+                </button>
+            </div>
+
+            <button id="btn-close-level-select" class="action-btn primary">CONFIRM LEVEL</button>
+        </div>
+    </div>
+
     <!-- Pause Screen Overlay -->
     <div id="pause-overlay" class="overlay hidden">
         <div class="overlay-content">
@@ -196,6 +249,6 @@
         </div>
     </div>
 
-    <script type="module" src="game.js?v=20260729_2326"></script>
+    <script type="module" src="game.js?v=20260729_2330"></script>
 </body>
 </html>
