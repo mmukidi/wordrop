@@ -90,80 +90,93 @@ let canvas = null;
 let ctx = null;
 let activeMatches = []; // Words currently highlighted on grid
 
-// DOM Elements
-const boardEl = document.getElementById("game-board");
-const tileMatrixEl = document.getElementById("tile-matrix") || boardEl;
-const scoreValEl = document.getElementById("score-val");
-const highScoreValEl = document.getElementById("high-score-val");
-const levelValEl = document.getElementById("level-val");
-const timerBarEl = document.getElementById("timer-bar");
-const timerCountdownEl = document.getElementById("timer-countdown-val");
-
-const btnShuffle = document.getElementById("btn-shuffle");
-const shuffleCooldownEl = document.getElementById("shuffle-cooldown");
-const btnHint = document.getElementById("btn-hint");
-const btnVortex = document.getElementById("btn-vortex");
-const btnStats = document.getElementById("btn-stats");
-const btnPause = document.getElementById("btn-pause");
-const btnSound = document.getElementById("btn-sound");
-const btnInfo = document.getElementById("btn-info");
-const btnRestart = document.getElementById("btn-restart");
-
-// Last Spelled HUD Elements
-const lastWordTextEl = document.getElementById("last-word-text");
-const lastWordScoreEl = document.getElementById("last-word-score");
-
-// Overlays & Modals
-const levelBtn = document.getElementById("level-btn");
-const levelSelectOverlay = document.getElementById("level-select-overlay");
-const btnCloseLevelSelect = document.getElementById("btn-close-level-select");
-
-const pauseOverlay = document.getElementById("pause-overlay");
-const btnResume = document.getElementById("btn-resume");
-const gameOverOverlay = document.getElementById("game-over-overlay");
-const finalScoreEl = document.getElementById("final-score");
-const finalLevelEl = document.getElementById("final-level");
-const finalWordsCountEl = document.getElementById("final-words-count");
-const btnPlayAgain = document.getElementById("btn-play-again");
-
-const infoOverlay = document.getElementById("info-overlay");
-const btnCloseInfo = document.getElementById("btn-close-info");
-const statsOverlay = document.getElementById("stats-overlay");
-const btnCloseStats = document.getElementById("btn-close-stats");
-const statsWordsCountEl = document.getElementById("stats-words-count");
-const statsLongestWordEl = document.getElementById("stats-longest-word");
-const statsRareCountEl = document.getElementById("stats-rare-count");
-const statsHighScoreEl = document.getElementById("stats-high-score");
+// DOM Element References (Initialized dynamically in initDOMElements)
+let boardEl, tileMatrixEl, scoreValEl, highScoreValEl, levelValEl, timerBarEl, timerCountdownEl;
+let btnShuffle, shuffleCooldownEl, btnHint, btnVortex, btnStats, btnPause, btnSound, btnInfo, btnRestart, levelBtn;
+let lastWordTextEl, lastWordScoreEl, pauseOverlay, btnResume, gameOverOverlay, finalScoreEl, finalLevelEl, finalWordsCountEl, btnPlayAgain;
+let infoOverlay, btnCloseInfo, statsOverlay, btnCloseStats, levelSelectOverlay, btnCloseLevelSelect;
+let statsWordsCountEl, statsLongestWordEl, statsRareCountEl, statsHighScoreEl, comboBadge, wordPopup;
 
 // Gamer Stats Tracking
 let longestWordSpelled = "—";
 let rareTilesClearedCount = 0;
 
-// Badges / Notifications
-const comboBadge = document.getElementById("combo-badge");
-const wordPopup = document.getElementById("word-popup");
+function initDOMElements() {
+    boardEl = document.getElementById("game-board");
+    tileMatrixEl = document.getElementById("tile-matrix") || boardEl;
+    scoreValEl = document.getElementById("score-val");
+    highScoreValEl = document.getElementById("high-score-val");
+    levelValEl = document.getElementById("level-val");
+    timerBarEl = document.getElementById("timer-bar");
+    timerCountdownEl = document.getElementById("timer-countdown-val");
+
+    btnShuffle = document.getElementById("btn-shuffle");
+    shuffleCooldownEl = document.getElementById("shuffle-cooldown");
+    btnHint = document.getElementById("btn-hint");
+    btnVortex = document.getElementById("btn-vortex");
+    btnStats = document.getElementById("btn-stats");
+    btnPause = document.getElementById("btn-pause");
+    btnSound = document.getElementById("btn-sound");
+    btnInfo = document.getElementById("btn-info");
+    btnRestart = document.getElementById("btn-restart");
+    levelBtn = document.getElementById("level-btn");
+
+    lastWordTextEl = document.getElementById("last-word-text");
+    lastWordScoreEl = document.getElementById("last-word-score");
+
+    pauseOverlay = document.getElementById("pause-overlay");
+    btnResume = document.getElementById("btn-resume");
+    gameOverOverlay = document.getElementById("game-over-overlay");
+    finalScoreEl = document.getElementById("final-score");
+    finalLevelEl = document.getElementById("final-level");
+    finalWordsCountEl = document.getElementById("final-words-count");
+    btnPlayAgain = document.getElementById("btn-play-again");
+
+    infoOverlay = document.getElementById("info-overlay");
+    btnCloseInfo = document.getElementById("btn-close-info");
+    statsOverlay = document.getElementById("stats-overlay");
+    btnCloseStats = document.getElementById("btn-close-stats");
+    levelSelectOverlay = document.getElementById("level-select-overlay");
+    btnCloseLevelSelect = document.getElementById("btn-close-level-select");
+
+    statsWordsCountEl = document.getElementById("stats-words-count");
+    statsLongestWordEl = document.getElementById("stats-longest-word");
+    statsRareCountEl = document.getElementById("stats-rare-count");
+    statsHighScoreEl = document.getElementById("stats-high-score");
+
+    comboBadge = document.getElementById("combo-badge");
+    wordPopup = document.getElementById("word-popup");
+}
 
 /* --- Initialization --- */
 
-window.addEventListener("DOMContentLoaded", async () => {
-    // Load high score
+async function initGame() {
+    initDOMElements();
     highScore = parseInt(localStorage.getItem("wordrop_high_score")) || 0;
-    highScoreValEl.textContent = formatScore(highScore);
+    if (highScoreValEl) highScoreValEl.textContent = formatScore(highScore);
 
     // Initialize Swipe Canvas
     canvas = document.getElementById("swipe-canvas");
-    ctx = canvas.getContext("2d");
-    resizeSwipeCanvas();
+    if (canvas) {
+        ctx = canvas.getContext("2d");
+        resizeSwipeCanvas();
+    }
 
-    // Initialize Dictionary
-    await validator.init();
+    // Initialize Dictionary async
+    validator.init().catch(err => console.warn("Dictionary async init fallback:", err));
 
     // Attach Event Listeners
     setupEventListeners();
 
     // Start Game
     startGame();
-});
+}
+
+if (document.readyState === "loading") {
+    window.addEventListener("DOMContentLoaded", initGame);
+} else {
+    initGame();
+}
 
 function resizeSwipeCanvas() {
     if (canvas) {
