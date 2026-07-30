@@ -512,32 +512,6 @@ function resolveInitialMatches() {
     }
 }
 
-/* --- Exact Mathematical Coordinate Hit Detection for Touch & Mouse --- */
-
-function getTileFromCoords(clientX, clientY) {
-    const tileMatrixEl = getTileMatrixContainer();
-    if (!tileMatrixEl) return null;
-    const rect = tileMatrixEl.getBoundingClientRect();
-
-    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
-        return null;
-    }
-
-    const relX = clientX - rect.left;
-    const relY = clientY - rect.top;
-
-    const colWidth = rect.width / GRID_COLS;
-    const rowHeight = rect.height / GRID_ROWS;
-
-    const col = Math.floor(relX / colWidth);
-    const row = Math.floor((rect.height - relY) / rowHeight);
-
-    if (col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS) {
-        return grid[row][col];
-    }
-    return null;
-}
-
 /* --- Exact Mathematical Coordinate & Touch Extraction Engine --- */
 
 function getTouchCoords(e) {

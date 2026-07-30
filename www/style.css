@@ -23,6 +23,13 @@
     --rare-glow: rgba(245, 158, 11, 0.5);
 }
 
+/* Reset and Core Styling */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
 html {
     background-color: #0f0f13 !important;
     color-scheme: dark;
@@ -257,24 +264,22 @@ body {
     border-radius: 12px;
     overflow: hidden;
     touch-action: none;
-    display: flex;
-    flex-direction: column;
 }
 
-/* Tile Matrix Container (100% height inside flex container, zero tile overlapping) */
+/* Tile Matrix Container — position:absolute so tile % sizing works */
 .tile-matrix {
-    position: relative;
-    flex: 1 1 0;
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
+    height: calc(100% - 22px);
 }
 
-/* Thick Solid Cyberpunk Floor Bar (Positioned cleanly underneath tile-matrix) */
+/* Thick Solid Cyberpunk Floor Bar — sits below tile-matrix, never overlaps tiles */
 .thick-floor-bar {
-    position: relative;
-    flex-shrink: 0;
+    position: absolute;
+    bottom: 0;
+    left: 0;
     width: 100%;
     height: 22px;
     background: linear-gradient(to bottom, rgba(0, 240, 255, 0.4), rgba(15, 15, 25, 0.98));
@@ -380,6 +385,7 @@ body {
     color: #fff;
     line-height: 1;
     text-shadow: 0 1px 4px rgba(0,0,0,0.7);
+    pointer-events: none !important;
 }
 
 .tile-value {
@@ -389,6 +395,7 @@ body {
     font-size: clamp(9px, 1.3vh, 12px);
     color: rgba(255, 255, 255, 0.75);
     font-weight: 700;
+    pointer-events: none !important;
 }
 
 /* Letter Rarity Classes */
