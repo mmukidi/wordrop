@@ -42,6 +42,11 @@ class WordValidator {
             "top", "red", "blue", "gold", "cyan", "drop", "game", "grid", "tile", "neon", "cool", "code",
             "bomb", "swap", "hint", "fast", "slow", "rise", "word", "row", "col", "play", "test", "demo"
         ];
+
+        // Seed fallback words immediately so validation is ready on millisecond 0
+        this.fallbackWords.forEach(w => {
+            if (w.length >= 3) this.words.add(w.toLowerCase());
+        });
     }
 
     async init() {

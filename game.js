@@ -302,6 +302,10 @@ function closeInfoModal() {
 
 /* --- Gameplay Loop & Core Logic --- */
 
+function getTileMatrixContainer() {
+    return document.getElementById("tile-matrix") || document.getElementById("game-board") || boardEl;
+}
+
 function startGame() {
     // Reset scores & states
     score = 0;
@@ -309,7 +313,7 @@ function startGame() {
     wordsClearedCount = 0;
     isPlaying = true;
     isPaused = false;
-    isBoardLocked = false;
+    forceUnlockBoard();
     riseProgress = 0;
     tileIdCounter = 0;
     shuffleCooldownActive = false;
@@ -318,33 +322,49 @@ function startGame() {
     activeMatches = [];
     resizeSwipeCanvas();
 
-    scoreValEl.textContent = formatScore(score);
-    levelValEl.textContent = level;
-    timerBarEl.style.width = "0%";
-    boardEl.classList.remove("danger");
+    if (scoreValEl) scoreValEl.textContent = formatScore(score);
+    if (levelValEl) levelValEl.textContent = level;
+    if (timerBarEl) timerBarEl.style.width = "0%";
+    if (boardEl) boardEl.classList.remove("danger");
 
     // Reset HUD Spelled Word indicators
-    lastWordTextEl.textContent = "—";
-    lastWordScoreEl.textContent = "";
+    if (lastWordTextEl) lastWordTextEl.textContent = "—";
+    if (lastWordScoreEl) lastWordScoreEl.textContent = "";
 
-    btnShuffle.disabled = false;
-    shuffleCooldownEl.style.width = "0%";
+    if (btnShuffle) btnShuffle.disabled = false;
+    if (shuffleCooldownEl) shuffleCooldownEl.style.width = "0%";
     
     // Hide Overlays
-    pauseOverlay.classList.add("hidden");
-    gameOverOverlay.classList.add("hidden");
-    comboBadge.classList.add("hidden");
-    wordPopup.classList.add("hidden");
+    if (pauseOverlay) pauseOverlay.classList.add("hidden");
+    if (gameOverOverlay) gameOverOverlay.classList.add("hidden");
+    if (comboBadge) comboBadge.classList.add("hidden");
+    if (wordPopup) wordPopup.classList.add("hidden");
 
     // Clear Board DOM & Matrix
-    const existingTiles = boardEl.querySelectorAll(".tile");
-    existingTiles.forEach(t => t.remove());
+    const container = getTileMatrixContainer();
+    if (container) {
+        container.querySelectorAll(".tile").forEach(t => t.remove());
+    }
+    if (boardEl) {
+        boardEl.querySelectorAll(".tile").forEach(t => t.remove());
+    }
     grid = Array(GRID_ROWS).fill(null).map(() => Array(GRID_COLS).fill(null));
 
     // Spawn Starting Board (4 rows)
     for (let y = 0; y < START_ROWS; y++) {
         for (let x = 0; x < GRID_COLS; x++) {
             spawnTile(x, y);
+        }
+    }
+
+    // Safety Verification Check: If 0 tiles exist, force emergency spawn
+    const createdTiles = (container || boardEl).querySelectorAll(".tile");
+    if (createdTiles.length === 0) {
+        console.warn("Emergency: 0 tiles found after spawn. Forcing emergency board generation.");
+        for (let y = 0; y < START_ROWS; y++) {
+            for (let x = 0; x < GRID_COLS; x++) {
+                spawnTile(x, y);
+            }
         }
     }
 
@@ -356,6 +376,9 @@ function startGame() {
 }
 
 function spawnTile(x, y, forcedLetter = null) {
+    const parentContainer = getTileMatrixContainer();
+    if (!parentContainer) return;
+
     const letter = forcedLetter || getRandomLetter();
     const value = TILE_VALUES[letter];
     
@@ -381,7 +404,7 @@ function spawnTile(x, y, forcedLetter = null) {
         </div>
     `;
 
-    tileMatrixEl.appendChild(tileEl);
+    parentContainer.appendChild(tileEl);
 
     // Save in matrix
     grid[y][x] = {
