@@ -305,16 +305,20 @@ function setupEventListeners() {
     if (btnStats) btnStats.addEventListener("click", openStatsModal);
     if (btnCloseStats) btnCloseStats.addEventListener("click", closeStatsModal);
 
-    // Board Universal Touch & Pointer Swipe Interaction (100% Web & Native iOS WKWebView Support)
-    boardEl.addEventListener("pointerdown", onPointerDown, { passive: false });
-    boardEl.addEventListener("pointermove", onPointerMove, { passive: false });
-    boardEl.addEventListener("pointerup", onPointerUp, { passive: false });
-    boardEl.addEventListener("pointercancel", onPointerUp, { passive: false });
+    // Board Touch/Pointer Swipe Interaction
+    // On iOS WKWebView, both touch* and pointer* fire for the same finger.
+    // We prefer touch events when available, and fall back to pointer events for desktop.
+    let usingTouchInput = false;
 
-    boardEl.addEventListener("touchstart", onPointerDown, { passive: false });
-    boardEl.addEventListener("touchmove", onPointerMove, { passive: false });
-    boardEl.addEventListener("touchend", onPointerUp, { passive: false });
-    boardEl.addEventListener("touchcancel", onPointerUp, { passive: false });
+    boardEl.addEventListener("touchstart", (e) => { usingTouchInput = true; onSwipeStart(e); }, { passive: false });
+    boardEl.addEventListener("touchmove", (e) => { onSwipeMove(e); }, { passive: false });
+    boardEl.addEventListener("touchend", (e) => { onSwipeEnd(e); }, { passive: false });
+    boardEl.addEventListener("touchcancel", (e) => { onSwipeEnd(e); }, { passive: false });
+
+    boardEl.addEventListener("pointerdown", (e) => { if (!usingTouchInput) onSwipeStart(e); }, { passive: false });
+    boardEl.addEventListener("pointermove", (e) => { if (!usingTouchInput) onSwipeMove(e); }, { passive: false });
+    boardEl.addEventListener("pointerup", (e) => { if (!usingTouchInput) onSwipeEnd(e); }, { passive: false });
+    boardEl.addEventListener("pointercancel", (e) => { if (!usingTouchInput) onSwipeEnd(e); }, { passive: false });
 }
 
 function openLevelSelectModal() {
@@ -515,12 +519,15 @@ function resolveInitialMatches() {
 /* --- Exact Mathematical Coordinate & Touch Extraction Engine --- */
 
 function getTouchCoords(e) {
+    // Native touch events (iOS WKWebView)
     if (e.touches && e.touches.length > 0) {
         return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
     }
+    // Touch end (finger lifted)
     if (e.changedTouches && e.changedTouches.length > 0) {
         return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY };
     }
+    // Desktop pointer/mouse events
     return { clientX: e.clientX, clientY: e.clientY };
 }
 
@@ -529,6 +536,7 @@ function getTileFromCoords(clientX, clientY) {
     if (!tileMatrixEl) return null;
     const rect = tileMatrixEl.getBoundingClientRect();
 
+    // Out of bounds check
     if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
         return null;
     }
@@ -540,7 +548,12 @@ function getTileFromCoords(clientX, clientY) {
     const rowHeight = rect.height / GRID_ROWS;
 
     const col = Math.floor(relX / colWidth);
-    const row = Math.floor((rect.height - relY) / rowHeight);
+    // Tiles use: transform translateY = (13 - row) * 100%
+    // So row 13 is at the top (relY=0), row 0 is at the bottom.
+    // visualRowFromTop = floor(relY / rowHeight) gives 0..13
+    // gameRow = 13 - visualRowFromTop
+    const visualRowFromTop = Math.floor(relY / rowHeight);
+    const row = (GRID_ROWS - 1) - visualRowFromTop;
 
     if (row >= 0 && row < GRID_ROWS && col >= 0 && col < GRID_COLS) {
         return grid[row][col];
@@ -550,12 +563,11 @@ function getTileFromCoords(clientX, clientY) {
 
 /* --- Drag & Swap / Path Word Tracing System --- */
 
-function onPointerDown(e) {
+function onSwipeStart(e) {
     if (!isPlaying || isPaused || isBoardLocked) return;
     if (e.cancelable) e.preventDefault();
 
     const coords = getTouchCoords(e);
-    if (coords.clientX === undefined || coords.clientY === undefined) return;
 
     // Clear any previous visual selections
     boardEl.querySelectorAll(".tile.selected").forEach(el => el.classList.remove("selected"));
@@ -564,8 +576,7 @@ function onPointerDown(e) {
     // Unmute/resume AudioContext on first interact
     audio.init();
 
-    const el = e.target ? e.target.closest(".tile") : null;
-    const tile = (el ? getTileById(parseInt(el.dataset.id)) : null) || getTileFromCoords(coords.clientX, coords.clientY);
+    const tile = getTileFromCoords(coords.clientX, coords.clientY);
 
     if (tile) {
         isSwipingPath = true;
@@ -576,14 +587,12 @@ function onPointerDown(e) {
     }
 }
 
-function onPointerMove(e) {
+function onSwipeMove(e) {
     if (!isSwipingPath) return;
     if (e.cancelable) e.preventDefault();
 
     const coords = getTouchCoords(e);
-    if (coords.clientX === undefined || coords.clientY === undefined) return;
-
-    const tile = getTileFromCoords(coords.clientX, coords.clientY) || (document.elementFromPoint(coords.clientX, coords.clientY)?.closest(".tile") ? getTileById(parseInt(document.elementFromPoint(coords.clientX, coords.clientY).closest(".tile").dataset.id)) : null);
+    const tile = getTileFromCoords(coords.clientX, coords.clientY);
 
     if (!tile) return;
 
@@ -629,8 +638,9 @@ function onPointerMove(e) {
     drawSwipePath();
 }
 
-function onPointerUp(e) {
+function onSwipeEnd(e) {
     if (!isSwipingPath) return;
+    if (e.cancelable) e.preventDefault();
     
     isSwipingPath = false;
     boardEl.querySelectorAll(".tile.selected").forEach(el => el.classList.remove("selected"));
