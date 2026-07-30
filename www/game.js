@@ -305,20 +305,31 @@ function setupEventListeners() {
     if (btnStats) btnStats.addEventListener("click", openStatsModal);
     if (btnCloseStats) btnCloseStats.addEventListener("click", closeStatsModal);
 
-    // Board Touch/Pointer Swipe Interaction
-    // On iOS WKWebView, both touch* and pointer* fire for the same finger.
-    // We prefer touch events when available, and fall back to pointer events for desktop.
-    let usingTouchInput = false;
+    // ========================================================================
+    // GROUND-UP TOUCH/SWIPE SYSTEM (v2 — rebuilt for iOS WKWebView + Desktop)
+    // ========================================================================
+    // Strategy: Use native touch events as PRIMARY input on touch devices.
+    // Fall back to mouse events on desktop. Avoid pointer events entirely
+    // because iOS WKWebView fires both touch* and pointer* for the same
+    // finger, causing double-handling and coordinate mismatches.
+    //
+    // All hit-testing uses pure mathematical coordinate→grid mapping.
+    // No elementFromPoint, no e.target.closest, no setPointerCapture.
+    // ========================================================================
 
-    boardEl.addEventListener("touchstart", (e) => { usingTouchInput = true; onSwipeStart(e); }, { passive: false });
-    boardEl.addEventListener("touchmove", (e) => { onSwipeMove(e); }, { passive: false });
-    boardEl.addEventListener("touchend", (e) => { onSwipeEnd(e); }, { passive: false });
-    boardEl.addEventListener("touchcancel", (e) => { onSwipeEnd(e); }, { passive: false });
+    const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
 
-    boardEl.addEventListener("pointerdown", (e) => { if (!usingTouchInput) onSwipeStart(e); }, { passive: false });
-    boardEl.addEventListener("pointermove", (e) => { if (!usingTouchInput) onSwipeMove(e); }, { passive: false });
-    boardEl.addEventListener("pointerup", (e) => { if (!usingTouchInput) onSwipeEnd(e); }, { passive: false });
-    boardEl.addEventListener("pointercancel", (e) => { if (!usingTouchInput) onSwipeEnd(e); }, { passive: false });
+    if (isTouchDevice) {
+        boardEl.addEventListener("touchstart", handleTouchStart, { passive: false });
+        boardEl.addEventListener("touchmove",  handleTouchMove,  { passive: false });
+        boardEl.addEventListener("touchend",   handleTouchEnd,   { passive: false });
+        boardEl.addEventListener("touchcancel", handleTouchEnd,  { passive: false });
+    } else {
+        boardEl.addEventListener("mousedown", handleMouseDown);
+        boardEl.addEventListener("mousemove", handleMouseMove);
+        boardEl.addEventListener("mouseup",   handleMouseUp);
+        boardEl.addEventListener("mouseleave", handleMouseUp);
+    }
 }
 
 function openLevelSelectModal() {
@@ -516,156 +527,184 @@ function resolveInitialMatches() {
     }
 }
 
-/* --- Exact Mathematical Coordinate & Touch Extraction Engine --- */
+// ========================================================================
+// COORDINATE → GRID MAPPING (Pure Math, No DOM Hit-Testing)
+// ========================================================================
+//
+// Tile CSS positioning:
+//   width:  calc(100% / 8)   → tileWidth  = matrixWidth  / 8
+//   height: calc(100% / 14)  → tileHeight = matrixHeight / 14
+//   transform: translate3d(col * 100%, (13 - row) * 100%, 0)
+//
+// So visually:
+//   Column c occupies X range: [c * tileWidth, (c+1) * tileWidth)
+//   Row r occupies Y range from top: [(13-r) * tileHeight, (14-r) * tileHeight)
+//
+// To convert touch (clientX, clientY) → (col, row):
+//   relX = clientX - matrixRect.left
+//   relY = clientY - matrixRect.top
+//   col = floor(relX / tileWidth)              → 0..7
+//   visualRow = floor(relY / tileHeight)       → 0..13 (0 = top)
+//   gameRow = 13 - visualRow                   → 13..0 (13 = top)
+// ========================================================================
 
-function getTouchCoords(e) {
-    // Native touch events (iOS WKWebView)
-    if (e.touches && e.touches.length > 0) {
-        return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
-    }
-    // Touch end (finger lifted)
-    if (e.changedTouches && e.changedTouches.length > 0) {
-        return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY };
-    }
-    // Desktop pointer/mouse events
-    return { clientX: e.clientX, clientY: e.clientY };
-}
+function coordToGrid(clientX, clientY) {
+    const matrix = document.getElementById("tile-matrix");
+    if (!matrix) return null;
 
-function getTileFromCoords(clientX, clientY) {
-    const tileMatrixEl = getTileMatrixContainer();
-    if (!tileMatrixEl) return null;
-    const rect = tileMatrixEl.getBoundingClientRect();
+    const rect = matrix.getBoundingClientRect();
 
-    // Out of bounds check
-    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+    // Reject touches outside the tile matrix
+    if (clientX < rect.left || clientX >= rect.right ||
+        clientY < rect.top  || clientY >= rect.bottom) {
         return null;
     }
 
     const relX = clientX - rect.left;
     const relY = clientY - rect.top;
 
-    const colWidth = rect.width / GRID_COLS;
-    const rowHeight = rect.height / GRID_ROWS;
+    const tileW = rect.width  / GRID_COLS;   // 8 columns
+    const tileH = rect.height / GRID_ROWS;   // 14 rows
 
-    const col = Math.floor(relX / colWidth);
-    // Tiles use: transform translateY = (13 - row) * 100%
-    // So row 13 is at the top (relY=0), row 0 is at the bottom.
-    // visualRowFromTop = floor(relY / rowHeight) gives 0..13
-    // gameRow = 13 - visualRowFromTop
-    const visualRowFromTop = Math.floor(relY / rowHeight);
-    const row = (GRID_ROWS - 1) - visualRowFromTop;
+    const col = Math.min(Math.floor(relX / tileW), GRID_COLS - 1);
+    const visualRow = Math.min(Math.floor(relY / tileH), GRID_ROWS - 1);
+    const row = (GRID_ROWS - 1) - visualRow;   // flip: top visual = row 13
 
-    if (row >= 0 && row < GRID_ROWS && col >= 0 && col < GRID_COLS) {
-        return grid[row][col];
-    }
-    return null;
+    // Return the tile object at this grid cell (may be null if cell is empty)
+    return grid[row] && grid[row][col] ? grid[row][col] : null;
 }
 
-/* --- Drag & Swap / Path Word Tracing System --- */
+// ========================================================================
+// TOUCH EVENT HANDLERS (iOS WKWebView — uses e.touches[0])
+// ========================================================================
 
-function onSwipeStart(e) {
+function handleTouchStart(e) {
     if (!isPlaying || isPaused || isBoardLocked) return;
-    if (e.cancelable) e.preventDefault();
+    e.preventDefault();   // block iOS scroll/zoom
 
-    const coords = getTouchCoords(e);
+    const t = e.touches[0];
+    swipeBegin(t.clientX, t.clientY);
+}
 
-    // Clear any previous visual selections
+function handleTouchMove(e) {
+    if (!isSwipingPath) return;
+    e.preventDefault();
+
+    const t = e.touches[0];
+    swipeContinue(t.clientX, t.clientY);
+}
+
+function handleTouchEnd(e) {
+    if (!isSwipingPath) return;
+    e.preventDefault();
+    swipeFinish();
+}
+
+// ========================================================================
+// MOUSE EVENT HANDLERS (Desktop fallback)
+// ========================================================================
+
+let mouseIsDown = false;
+
+function handleMouseDown(e) {
+    if (!isPlaying || isPaused || isBoardLocked) return;
+    mouseIsDown = true;
+    swipeBegin(e.clientX, e.clientY);
+}
+
+function handleMouseMove(e) {
+    if (!mouseIsDown || !isSwipingPath) return;
+    swipeContinue(e.clientX, e.clientY);
+}
+
+function handleMouseUp(e) {
+    if (!mouseIsDown) return;
+    mouseIsDown = false;
+    swipeFinish();
+}
+
+// ========================================================================
+// UNIFIED SWIPE LOGIC (shared by touch & mouse handlers)
+// ========================================================================
+
+function swipeBegin(clientX, clientY) {
+    // Clear previous path
     boardEl.querySelectorAll(".tile.selected").forEach(el => el.classList.remove("selected"));
     swipePath = [];
+    isSwipingPath = false;
 
-    // Unmute/resume AudioContext on first interact
+    // Unmute AudioContext on first interaction
     audio.init();
 
-    const tile = getTileFromCoords(coords.clientX, coords.clientY);
-
-    if (tile) {
-        isSwipingPath = true;
-        swipePath.push(tile);
-        tile.el.classList.add("selected");
-        audio.playClick();
-        drawSwipePath();
-    }
-}
-
-function onSwipeMove(e) {
-    if (!isSwipingPath) return;
-    if (e.cancelable) e.preventDefault();
-
-    const coords = getTouchCoords(e);
-    const tile = getTileFromCoords(coords.clientX, coords.clientY);
-
+    const tile = coordToGrid(clientX, clientY);
     if (!tile) return;
 
-    const lastTile = swipePath[swipePath.length - 1];
-    if (tile.id === lastTile.id) return; // Pointer still hovering over the last tile in path
+    isSwipingPath = true;
+    swipePath.push(tile);
+    tile.el.classList.add("selected");
+    audio.playClick();
+    drawSwipePath();
+}
 
-    // 1. Backtrack detection: Allow players to reverse their path
+function swipeContinue(clientX, clientY) {
+    const tile = coordToGrid(clientX, clientY);
+    if (!tile) return;
+
+    const last = swipePath[swipePath.length - 1];
+    if (tile.id === last.id) return;   // still on same tile
+
+    // Backtrack: dragging back reverses the path
     if (swipePath.length >= 2 && tile.id === swipePath[swipePath.length - 2].id) {
-        const removedTile = swipePath.pop();
-        removedTile.el.classList.remove("selected");
+        const removed = swipePath.pop();
+        removed.el.classList.remove("selected");
         audio.playClick();
         drawSwipePath();
         return;
     }
 
-    // 2. Prevent self-intersection loops
+    // No loops
     if (swipePath.some(t => t.id === tile.id)) return;
 
-    // 3. Grid Adjacency check (must be right next to each other, no diagonals)
-    const dx = Math.abs(tile.x - lastTile.x);
-    const dy = Math.abs(tile.y - lastTile.y);
-    const isAdjacent = (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
-    if (!isAdjacent) return;
+    // Must be orthogonally adjacent (no diagonals)
+    const dx = Math.abs(tile.x - last.x);
+    const dy = Math.abs(tile.y - last.y);
+    if (!((dx === 1 && dy === 0) || (dx === 0 && dy === 1))) return;
 
-    // 4. Straight-line constraint (lock path to vertical or horizontal based on 1st & 2nd tiles)
+    // Straight-line lock: after 2 tiles, path is locked to one axis
     if (swipePath.length >= 2) {
-        const firstTile = swipePath[0];
-        const secondTile = swipePath[1];
-        const isHorizontal = firstTile.y === secondTile.y;
-        if (isHorizontal) {
-            // Must stay on same row
-            if (tile.y !== firstTile.y) return;
-        } else {
-            // Must stay on same column
-            if (tile.x !== firstTile.x) return;
-        }
+        const first  = swipePath[0];
+        const second = swipePath[1];
+        const horizontal = (first.y === second.y);
+        if (horizontal && tile.y !== first.y) return;
+        if (!horizontal && tile.x !== first.x) return;
     }
 
-    // Accept tile into path
+    // Accept tile
     swipePath.push(tile);
     tile.el.classList.add("selected");
     audio.playSwipeStep(swipePath.length);
     drawSwipePath();
 }
 
-function onSwipeEnd(e) {
-    if (!isSwipingPath) return;
-    if (e.cancelable) e.preventDefault();
-    
+function swipeFinish() {
     isSwipingPath = false;
     boardEl.querySelectorAll(".tile.selected").forEach(el => el.classList.remove("selected"));
 
     const path = [...swipePath];
     swipePath = [];
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (path.length === 2) {
-        // CASE A: User swiped exactly 2 adjacent tiles -> SWAP them
-        const tileA = path[0];
-        const tileB = path[1];
-        executeSwap(tileA, tileB.x, tileB.y);
-    } 
-    else if (path.length >= 3) {
-        // CASE B: User swiped 3+ tiles in a line -> Validate Word
-        const wordStr = path.map(t => t.letter).join("").toLowerCase();
-        
-        if (validator.isValidWord(wordStr)) {
-            // Successful word spelled! Clear it
-            sliceClearWord({ word: wordStr, tiles: path });
+        // 2-tile swipe → swap positions
+        executeSwap(path[0], path[1].x, path[1].y);
+    } else if (path.length >= 3) {
+        // 3+ tile swipe → validate word
+        const word = path.map(t => t.letter).join("").toLowerCase();
+        if (validator.isValidWord(word)) {
+            sliceClearWord({ word, tiles: path });
         } else {
-            // Word not valid in dictionary: flash trail neon red
             drawErrorPath(path);
-            audio.playClick(); // short warning/dud feedback click
+            audio.playClick();
         }
     }
 }
