@@ -53,7 +53,7 @@ body {
     height: 100dvh;
     display: flex;
     flex-direction: column;
-    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 10px)) 8px;
+    padding: calc(6px + env(safe-area-inset-top, 0px)) 8px calc(6px + env(safe-area-inset-bottom, 10px)) 8px;
     background: radial-gradient(circle at center, #1a1a26 0%, var(--bg-dark) 100%);
     box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
     position: relative;
