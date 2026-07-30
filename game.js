@@ -6,6 +6,21 @@
 import { validator } from "./dictionary.js";
 import { audio } from "./audio.js";
 
+// Global Production Error Catchers for Sentry.io
+window.addEventListener("error", (event) => {
+    console.error("[Wordrop Global Error Caught]", event.error || event.message);
+    if (window.Sentry && typeof Sentry.captureException === "function") {
+        Sentry.captureException(event.error || new Error(event.message));
+    }
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+    console.error("[Wordrop Unhandled Rejection]", event.reason);
+    if (window.Sentry && typeof Sentry.captureException === "function") {
+        Sentry.captureException(event.reason);
+    }
+});
+
 // Game Constants
 const GRID_COLS = 8;
 const GRID_ROWS = 14;
