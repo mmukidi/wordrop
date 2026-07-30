@@ -545,17 +545,14 @@ function onPointerDown(e) {
     // Unmute/resume AudioContext on first interact
     audio.init();
 
-    const tile = getTileFromCoords(e.clientX, e.clientY) || (e.target ? getTileById(parseInt(e.target.closest(".tile")?.dataset?.id)) : null);
+    const el = e.target ? e.target.closest(".tile") : null;
+    const tile = (el ? getTileById(parseInt(el.dataset.id)) : null) || getTileFromCoords(e.clientX, e.clientY);
 
     if (tile) {
         isSwipingPath = true;
         swipePath.push(tile);
         tile.el.classList.add("selected");
         audio.playClick();
-
-        if (e.target && typeof e.target.setPointerCapture === "function" && e.pointerId !== undefined) {
-            try { e.target.setPointerCapture(e.pointerId); } catch(err) {}
-        }
         drawSwipePath();
     }
 }
@@ -563,7 +560,10 @@ function onPointerDown(e) {
 function onPointerMove(e) {
     if (!isSwipingPath) return;
 
-    const tile = getTileFromCoords(e.clientX, e.clientY);
+    const el = document.elementFromPoint(e.clientX, e.clientY);
+    const tileEl = el ? el.closest(".tile") : null;
+    const tile = (tileEl ? getTileById(parseInt(tileEl.dataset.id)) : null) || getTileFromCoords(e.clientX, e.clientY);
+
     if (!tile) return;
 
     const lastTile = swipePath[swipePath.length - 1];
@@ -586,6 +586,20 @@ function onPointerMove(e) {
     const dy = Math.abs(tile.y - lastTile.y);
     const isAdjacent = (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
     if (!isAdjacent) return;
+
+    // 4. Straight-line constraint (lock path to vertical or horizontal based on 1st & 2nd tiles)
+    if (swipePath.length >= 2) {
+        const firstTile = swipePath[0];
+        const secondTile = swipePath[1];
+        const isHorizontal = firstTile.y === secondTile.y;
+        if (isHorizontal) {
+            // Must stay on same row
+            if (tile.y !== firstTile.y) return;
+        } else {
+            // Must stay on same column
+            if (tile.x !== firstTile.x) return;
+        }
+    }
 
     // Accept tile into path
     swipePath.push(tile);
