@@ -305,11 +305,16 @@ function setupEventListeners() {
     if (btnStats) btnStats.addEventListener("click", openStatsModal);
     if (btnCloseStats) btnCloseStats.addEventListener("click", closeStatsModal);
 
-    // Board Touch/Mouse Swipe Interaction (Single Unified Pointer Stream)
-    boardEl.addEventListener("pointerdown", onPointerDown);
-    boardEl.addEventListener("pointermove", onPointerMove);
-    boardEl.addEventListener("pointerup", onPointerUp);
-    boardEl.addEventListener("pointercancel", onPointerUp);
+    // Board Universal Touch & Pointer Swipe Interaction (100% Web & Native iOS WKWebView Support)
+    boardEl.addEventListener("pointerdown", onPointerDown, { passive: false });
+    boardEl.addEventListener("pointermove", onPointerMove, { passive: false });
+    boardEl.addEventListener("pointerup", onPointerUp, { passive: false });
+    boardEl.addEventListener("pointercancel", onPointerUp, { passive: false });
+
+    boardEl.addEventListener("touchstart", onPointerDown, { passive: false });
+    boardEl.addEventListener("touchmove", onPointerMove, { passive: false });
+    boardEl.addEventListener("touchend", onPointerUp, { passive: false });
+    boardEl.addEventListener("touchcancel", onPointerUp, { passive: false });
 }
 
 function openLevelSelectModal() {
@@ -533,10 +538,50 @@ function getTileFromCoords(clientX, clientY) {
     return null;
 }
 
+/* --- Exact Mathematical Coordinate & Touch Extraction Engine --- */
+
+function getTouchCoords(e) {
+    if (e.touches && e.touches.length > 0) {
+        return { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY };
+    }
+    if (e.changedTouches && e.changedTouches.length > 0) {
+        return { clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY };
+    }
+    return { clientX: e.clientX, clientY: e.clientY };
+}
+
+function getTileFromCoords(clientX, clientY) {
+    const tileMatrixEl = getTileMatrixContainer();
+    if (!tileMatrixEl) return null;
+    const rect = tileMatrixEl.getBoundingClientRect();
+
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+        return null;
+    }
+
+    const relX = clientX - rect.left;
+    const relY = clientY - rect.top;
+
+    const colWidth = rect.width / GRID_COLS;
+    const rowHeight = rect.height / GRID_ROWS;
+
+    const col = Math.floor(relX / colWidth);
+    const row = Math.floor((rect.height - relY) / rowHeight);
+
+    if (row >= 0 && row < GRID_ROWS && col >= 0 && col < GRID_COLS) {
+        return grid[row][col];
+    }
+    return null;
+}
+
 /* --- Drag & Swap / Path Word Tracing System --- */
 
 function onPointerDown(e) {
     if (!isPlaying || isPaused || isBoardLocked) return;
+    if (e.cancelable) e.preventDefault();
+
+    const coords = getTouchCoords(e);
+    if (coords.clientX === undefined || coords.clientY === undefined) return;
 
     // Clear any previous visual selections
     boardEl.querySelectorAll(".tile.selected").forEach(el => el.classList.remove("selected"));
@@ -546,7 +591,7 @@ function onPointerDown(e) {
     audio.init();
 
     const el = e.target ? e.target.closest(".tile") : null;
-    const tile = (el ? getTileById(parseInt(el.dataset.id)) : null) || getTileFromCoords(e.clientX, e.clientY);
+    const tile = (el ? getTileById(parseInt(el.dataset.id)) : null) || getTileFromCoords(coords.clientX, coords.clientY);
 
     if (tile) {
         isSwipingPath = true;
@@ -559,10 +604,12 @@ function onPointerDown(e) {
 
 function onPointerMove(e) {
     if (!isSwipingPath) return;
+    if (e.cancelable) e.preventDefault();
 
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const tileEl = el ? el.closest(".tile") : null;
-    const tile = (tileEl ? getTileById(parseInt(tileEl.dataset.id)) : null) || getTileFromCoords(e.clientX, e.clientY);
+    const coords = getTouchCoords(e);
+    if (coords.clientX === undefined || coords.clientY === undefined) return;
+
+    const tile = getTileFromCoords(coords.clientX, coords.clientY) || (document.elementFromPoint(coords.clientX, coords.clientY)?.closest(".tile") ? getTileById(parseInt(document.elementFromPoint(coords.clientX, coords.clientY).closest(".tile").dataset.id)) : null);
 
     if (!tile) return;
 
