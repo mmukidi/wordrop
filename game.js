@@ -35,14 +35,14 @@ let tileIdCounter = 0;
 let riseProgress = 0; // 0 to 100
 let riseTimerInterval = null;
 const LEVEL_SPEEDS = {
-    1: 12.0, // 12 seconds per row
-    2: 10.0,
-    3: 8.5,
-    4: 7.0,
-    5: 5.5,
-    6: 4.5,
-    7: 3.5,
-    8: 2.5
+    1: 22.0, // 22 seconds per row (relaxed starting pace for Level 1)
+    2: 16.0,
+    3: 12.0,
+    4: 9.0,
+    5: 7.0,
+    6: 5.5,
+    7: 4.0,
+    8: 3.0
 };
 
 // Powerups state
