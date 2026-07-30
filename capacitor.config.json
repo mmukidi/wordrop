@@ -1,0 +1,17 @@
+{
+  "appId": "com.wordrop.game",
+  "appName": "Wordrop",
+  "webDir": ".",
+  "bundledWebRuntime": false,
+  "ios": {
+    "contentInset": "always",
+    "allowsLinkPreview": false,
+    "scrollEnabled": false
+  },
+  "plugins": {
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0f0f13"
+    }
+  }
+}

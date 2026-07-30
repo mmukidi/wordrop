@@ -1,0 +1,27 @@
+{
+  "name": "wordrop",
+  "version": "1.0.0",
+  "description": "Wordrop — Stack, Spell, & Survive. Modern Cyberpunk Word Puzzle Game.",
+  "main": "game.js",
+  "scripts": {
+    "build": "echo 'Web assets ready'",
+    "cap:sync": "npx cap sync ios",
+    "cap:open": "npx cap open ios"
+  },
+  "keywords": [
+    "word-game",
+    "puzzle",
+    "html5",
+    "capacitor",
+    "ios"
+  ],
+  "author": "Wordrop Team",
+  "license": "MIT",
+  "dependencies": {
+    "@capacitor/cli": "^6.0.0",
+    "@capacitor/core": "^6.0.0",
+    "@capacitor/haptics": "^6.0.0",
+    "@capacitor/ios": "^6.0.0",
+    "@capacitor/status-bar": "^6.0.0"
+  }
+}
