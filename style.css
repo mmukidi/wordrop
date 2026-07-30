@@ -47,30 +47,32 @@ body {
 /* Game Wrapper */
 .game-wrapper {
     width: 100vw;
-    max-width: 480px;
+    max-width: 520px;
+    height: 100vh;
     height: 100dvh;
-    max-height: 100dvh;
     display: flex;
     flex-direction: column;
-    padding: 10px 12px;
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 10px)) 8px;
     background: radial-gradient(circle at center, #1a1a26 0%, var(--bg-dark) 100%);
     box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
     position: relative;
     box-sizing: border-box;
     overflow: hidden;
+    justify-content: space-between;
 }
 
 /* Header */
 .game-header {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
 }
 
 .game-title {
     font-family: 'Outfit', sans-serif;
-    font-size: 26px;
+    font-size: 24px;
     font-weight: 900;
     letter-spacing: 2px;
     background: linear-gradient(to right, var(--neon-cyan), var(--neon-purple));
@@ -81,12 +83,12 @@ body {
 
 .level-indicator {
     font-family: 'Outfit', sans-serif;
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
     letter-spacing: 1px;
     color: var(--neon-cyan);
     border: 1px solid var(--neon-cyan);
-    padding: 2px 8px;
+    padding: 2px 6px;
     border-radius: 4px;
     box-shadow: 0 0 8px rgba(0, 240, 255, 0.2);
     display: inline-block;
@@ -95,22 +97,22 @@ body {
 
 .stats {
     display: flex;
-    gap: 8px;
+    gap: 6px;
 }
 
 .stat-box {
     background: var(--bg-card);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 6px;
-    padding: 4px 8px;
+    padding: 3px 6px;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    min-width: 75px;
+    min-width: 65px;
 }
 
 .stat-label {
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 800;
     color: var(--text-muted);
     letter-spacing: 0.5px;
@@ -118,24 +120,25 @@ body {
 
 .stat-value {
     font-family: 'Outfit', sans-serif;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 900;
     color: #fff;
 }
 
 /* Timer / Rise Bar */
 .timer-container {
+    flex-shrink: 0;
     display: flex;
     align-items: center;
-    gap: 8px;
-    margin-bottom: 8px;
+    gap: 6px;
+    margin-bottom: 4px;
     background: rgba(255, 255, 255, 0.02);
-    padding: 4px 8px;
+    padding: 3px 6px;
     border-radius: 6px;
 }
 
 .timer-label {
-    font-size: 9px;
+    font-size: 8px;
     font-weight: 800;
     letter-spacing: 0.5px;
     color: var(--text-muted);
@@ -144,7 +147,7 @@ body {
 
 .timer-track {
     flex-grow: 1;
-    height: 6px;
+    height: 5px;
     background: rgba(0, 0, 0, 0.4);
     border-radius: 3px;
     overflow: hidden;
@@ -163,9 +166,10 @@ body {
 
 /* Notifications (Combo / Cleared) */
 .notification-container {
+    flex-shrink: 0;
     position: relative;
-    height: 28px;
-    margin-bottom: 6px;
+    height: 24px;
+    margin-bottom: 4px;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -201,14 +205,14 @@ body {
 
 /* Board Container & Responsive Sizing */
 .board-container {
-    flex: 1 1 auto;
+    flex: 1 1 0;
     min-height: 0;
     display: flex;
     justify-content: center;
     align-items: center;
     position: relative;
     width: 100%;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
     overflow: hidden;
 }
 
@@ -217,45 +221,57 @@ body {
     height: 100%;
     max-height: 100%;
     aspect-ratio: 8 / 14;
-    width: auto;
+    width: 100%;
     max-width: 100%;
-    background: rgba(10, 10, 14, 0.92);
+    background: rgba(10, 10, 14, 0.95);
     border: 2px solid var(--border-glow);
     box-shadow: 0 0 30px rgba(0, 240, 255, 0.08), inset 0 0 25px rgba(0, 0, 0, 0.85);
     border-radius: 12px;
     overflow: hidden;
 }
 
-/* Broken Glass Baseline Floor */
+/* Solid Cyberpunk Broken Glass Floor Platform */
 .broken-glass-floor {
     position: absolute;
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 28px;
+    height: 20px;
     pointer-events: none;
-    z-index: 5;
-    background: linear-gradient(to top, rgba(0, 240, 255, 0.2), transparent);
-    border-top: 2px dashed rgba(0, 240, 255, 0.7);
-    box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 2px 10px rgba(0, 240, 255, 0.3);
+    z-index: 10;
+    background: linear-gradient(to top, rgba(0, 240, 255, 0.35), rgba(10, 10, 20, 0.95));
+    border-top: 3px solid var(--neon-cyan);
+    box-shadow: 0 -2px 15px rgba(0, 240, 255, 0.7), inset 0 2px 10px rgba(0, 240, 255, 0.4);
     overflow: hidden;
 }
 
-/* Glass Shards Overlay */
-.glass-shard {
+/* Floor Hazard Texture */
+.broken-glass-floor::before {
+    content: "";
     position: absolute;
-    bottom: 0;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(0, 240, 255, 0.15));
-    border: 1px solid rgba(0, 240, 255, 0.85);
-    box-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: repeating-linear-gradient(45deg, rgba(0, 240, 255, 0.25) 0, rgba(0, 240, 255, 0.25) 4px, transparent 4px, transparent 12px);
     pointer-events: none;
 }
 
-.glass-shard:nth-child(1) { left: 4%; width: 26px; height: 20px; clip-path: polygon(0 100%, 50% 0, 100% 100%); }
-.glass-shard:nth-child(2) { left: 22%; width: 34px; height: 25px; clip-path: polygon(0 100%, 30% 0, 100% 70%); }
-.glass-shard:nth-child(3) { left: 45%; width: 28px; height: 22px; clip-path: polygon(20% 100%, 60% 0, 100% 100%); }
-.glass-shard:nth-child(4) { left: 68%; width: 36px; height: 26px; clip-path: polygon(0 75%, 45% 0, 100% 100%); }
-.glass-shard:nth-child(5) { left: 88%; width: 28px; height: 18px; clip-path: polygon(0 100%, 75% 0, 100% 100%); }
+/* Glass Shards extending above the floor platform */
+.glass-shard {
+    position: absolute;
+    bottom: 8px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(0, 240, 255, 0.35));
+    border: 1.5px solid rgba(0, 240, 255, 0.95);
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.9);
+    pointer-events: none;
+}
+
+.glass-shard:nth-child(1) { left: 4%; width: 28px; height: 18px; clip-path: polygon(0 100%, 50% 0, 100% 100%); }
+.glass-shard:nth-child(2) { left: 22%; width: 36px; height: 24px; clip-path: polygon(0 100%, 35% 0, 100% 70%); }
+.glass-shard:nth-child(3) { left: 45%; width: 30px; height: 20px; clip-path: polygon(15% 100%, 65% 0, 100% 100%); }
+.glass-shard:nth-child(4) { left: 68%; width: 38px; height: 26px; clip-path: polygon(0 75%, 45% 0, 100% 100%); }
+.glass-shard:nth-child(5) { left: 88%; width: 26px; height: 16px; clip-path: polygon(0 100%, 80% 0, 100% 100%); }
 
 /* Grid Gridlines Backdrop */
 .grid-backdrop {
@@ -470,28 +486,31 @@ body {
 
 /* Footer & Buttons */
 .game-footer {
+    flex-shrink: 0;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
+    width: 100%;
+    padding: 2px 0;
 }
 
 .powerup-btn {
     flex-grow: 1;
-    height: 50px;
+    height: 42px;
     background: linear-gradient(135deg, rgba(168, 85, 247, 0.2) 0%, rgba(59, 130, 246, 0.2) 100%);
     border: 1px solid rgba(168, 85, 247, 0.4);
     border-radius: 8px;
     color: #fff;
     font-family: 'Outfit', sans-serif;
     font-weight: 800;
-    font-size: 13px;
+    font-size: 11px;
     letter-spacing: 0.5px;
     cursor: pointer;
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 8px;
+    gap: 4px;
     position: relative;
     overflow: hidden;
     transition: transform 0.1s, box-shadow 0.2s;
@@ -524,13 +543,14 @@ body {
 }
 
 .control-btn {
-    width: 50px;
-    height: 50px;
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
     background: var(--bg-card);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 8px;
     color: #fff;
-    font-size: 18px;
+    font-size: 16px;
     cursor: pointer;
     display: flex;
     justify-content: center;
