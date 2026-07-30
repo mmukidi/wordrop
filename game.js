@@ -72,6 +72,7 @@ const btnVortex = document.getElementById("btn-vortex");
 const btnStats = document.getElementById("btn-stats");
 const btnPause = document.getElementById("btn-pause");
 const btnSound = document.getElementById("btn-sound");
+const btnInfo = document.getElementById("btn-info");
 const btnRestart = document.getElementById("btn-restart");
 
 // Last Spelled HUD Elements
@@ -87,6 +88,8 @@ const finalLevelEl = document.getElementById("final-level");
 const finalWordsCountEl = document.getElementById("final-words-count");
 const btnPlayAgain = document.getElementById("btn-play-again");
 
+const infoOverlay = document.getElementById("info-overlay");
+const btnCloseInfo = document.getElementById("btn-close-info");
 const statsOverlay = document.getElementById("stats-overlay");
 const btnCloseStats = document.getElementById("btn-close-stats");
 const statsWordsCountEl = document.getElementById("stats-words-count");
@@ -196,6 +199,8 @@ function setupEventListeners() {
     btnShuffle.addEventListener("click", triggerShuffle);
     btnHint.addEventListener("click", triggerHint);
     if (btnVortex) btnVortex.addEventListener("click", triggerVortex);
+    if (btnInfo) btnInfo.addEventListener("click", openInfoModal);
+    if (btnCloseInfo) btnCloseInfo.addEventListener("click", closeInfoModal);
     if (btnStats) btnStats.addEventListener("click", openStatsModal);
     if (btnCloseStats) btnCloseStats.addEventListener("click", closeStatsModal);
 
@@ -204,6 +209,16 @@ function setupEventListeners() {
     boardEl.addEventListener("pointermove", onPointerMove);
     boardEl.addEventListener("pointerup", onPointerUp);
     boardEl.addEventListener("pointercancel", onPointerUp);
+}
+
+function openInfoModal() {
+    audio.playClick();
+    if (infoOverlay) infoOverlay.classList.remove("hidden");
+}
+
+function closeInfoModal() {
+    audio.playClick();
+    if (infoOverlay) infoOverlay.classList.add("hidden");
 }
 
 /* --- Gameplay Loop & Core Logic --- */

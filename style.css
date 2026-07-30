@@ -633,6 +633,47 @@ body {
     line-height: 1.5;
 }
 
+/* Info Modal Styling */
+.info-content {
+    max-width: 440px !important;
+    max-height: 85vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 16px !important;
+}
+
+.info-scroll-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    text-align: left;
+    margin: 12px 0 16px 0;
+    padding-right: 6px;
+}
+
+.info-section {
+    margin-bottom: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    border-radius: 8px;
+    padding: 10px 12px;
+}
+
+.info-section h3 {
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--neon-cyan);
+    margin-bottom: 6px;
+}
+
+.info-section p {
+    font-size: 11px !important;
+    color: var(--text-light) !important;
+    margin-bottom: 4px !important;
+    line-height: 1.4 !important;
+}
+
 .game-over-title {
     color: #ef4444 !important;
     text-shadow: 0 0 15px rgba(239, 68, 68, 0.4);

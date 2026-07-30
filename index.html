@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260729_2320">
+    <link rel="stylesheet" href="style.css?v=20260729_2326">
 </head>
 <body>
     <div class="game-wrapper">
@@ -48,6 +48,7 @@
                 <div class="powerup-label">VORTEX (-25)</div>
             </button>
 
+            <button id="btn-info" class="control-btn" title="How to Play & Tips">ℹ️</button>
             <button id="btn-stats" class="control-btn" title="Gamer Statistics">📊</button>
             <button id="btn-pause" class="control-btn" title="Pause Game">⏸️</button>
             <button id="btn-sound" class="control-btn" title="Toggle Sound">🔊</button>
@@ -122,6 +123,45 @@
         </div>
     </div>
 
+    <!-- How to Play & Info Modal Overlay -->
+    <div id="info-overlay" class="overlay hidden">
+        <div class="overlay-content info-content">
+            <h2>ℹ️ HOW TO PLAY & TIPS</h2>
+            
+            <div class="info-scroll-body">
+                <div class="info-section">
+                    <h3>🎮 SWIPE MECHANICS</h3>
+                    <p>• <b>Spell Words (3+ Tiles):</b> Drag across 3 or more letters in a straight line (horizontally or vertically) to form a word and clear them!</p>
+                    <p>• <b>Swap Tiles (2 Tiles):</b> Drag across 2 adjacent tiles to swap their positions.</p>
+                    <p>• <b>Backtrack:</b> Drag backward along your swipe path to undo letter selections.</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>⭐ SCORING & RARITIES</h3>
+                    <p>• Each letter has a point value in the corner (e.g. <b>A=1</b>, <b>Z=9</b>, <b>Q=9</b>).</p>
+                    <p>• <b>Blue Tiles:</b> Common letters.</p>
+                    <p>• <b>Purple Tiles:</b> Uncommon letters.</p>
+                    <p>• <b>Glowing Gold Tiles:</b> Rare high-value letters!</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>⚡ POWER-UPS</h3>
+                    <p>• 💡 <b>HINT (-10 pts):</b> Highlights a valid word on your board for 3.5s.</p>
+                    <p>• 🌀 <b>SHUFFLE:</b> Scrambles all active tiles on the grid.</p>
+                    <p>• 🔥 <b>VORTEX (-25 pts):</b> Vaporizes the bottom row when tiles get high.</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>💡 PRO TIPS</h3>
+                    <p>• Reaching <b>100 Points</b> or <b>4 Words</b> unlocks Level 2 and awards a timer reset!</p>
+                    <p>• Don't let letters reach the top boundary (Row 13), or it's Game Over!</p>
+                </div>
+            </div>
+
+            <button id="btn-close-info" class="action-btn primary">GOT IT!</button>
+        </div>
+    </div>
+
     <!-- Pause Screen Overlay -->
     <div id="pause-overlay" class="overlay hidden">
         <div class="overlay-content">
@@ -156,6 +196,6 @@
         </div>
     </div>
 
-    <script type="module" src="game.js?v=20260729_2320"></script>
+    <script type="module" src="game.js?v=20260729_2326"></script>
 </body>
 </html>
