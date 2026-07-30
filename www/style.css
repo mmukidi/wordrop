@@ -23,25 +23,31 @@
     --rare-glow: rgba(245, 158, 11, 0.5);
 }
 
-/* Reset and Core Styling */
-* {
-    box-sizing: border-box;
+html {
+    background-color: #0f0f13 !important;
+    color-scheme: dark;
+    width: 100%;
+    height: 100%;
     margin: 0;
     padding: 0;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: none; /* Prevents default zooming/scrolling on mobile */
+    overflow: hidden;
+    touch-action: none;
+    -webkit-text-size-adjust: 100%;
 }
 
 body {
-    background-color: var(--bg-dark);
+    background-color: #0f0f13 !important;
     color: var(--text-light);
     font-family: 'Inter', sans-serif;
     display: flex;
     justify-content: center;
     align-items: center;
+    width: 100%;
+    height: 100%;
     min-height: 100vh;
     min-height: 100dvh;
+    margin: 0;
+    padding: 0;
     overflow: hidden;
     touch-action: none;
     -webkit-user-select: none;

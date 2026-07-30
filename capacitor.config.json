@@ -2,10 +2,12 @@
   "appId": "com.wordrop.game",
   "appName": "Wordrop Burst",
   "webDir": "www",
+  "backgroundColor": "#0f0f13",
   "ios": {
     "contentInset": "always",
     "allowsLinkPreview": false,
-    "scrollEnabled": false
+    "scrollEnabled": false,
+    "backgroundColor": "#0f0f13"
   },
   "plugins": {
     "StatusBar": {
