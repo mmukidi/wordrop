@@ -1,0 +1,19 @@
+# Secrets and Environment Files
+.env
+*.env
+secrets/
+tokens/
+
+# OS and IDE Files
+.DS_Store
+.vscode/
+.idea/
+
+# Node dependencies and build artifacts
+node_modules/
+dist/
+build/
+
+# Xcode temporary files
+*.xcuserdata
+DerivedData/
