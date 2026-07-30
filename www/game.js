@@ -305,39 +305,11 @@ function setupEventListeners() {
     if (btnStats) btnStats.addEventListener("click", openStatsModal);
     if (btnCloseStats) btnCloseStats.addEventListener("click", closeStatsModal);
 
-    // Board Touch/Mouse Swipe Interaction
+    // Board Touch/Mouse Swipe Interaction (Single Unified Pointer Stream)
     boardEl.addEventListener("pointerdown", onPointerDown);
     boardEl.addEventListener("pointermove", onPointerMove);
     boardEl.addEventListener("pointerup", onPointerUp);
     boardEl.addEventListener("pointercancel", onPointerUp);
-
-    // Native iOS Touch Event Fallbacks to guarantee silky smooth dragging on iPhones
-    boardEl.addEventListener("touchstart", (e) => {
-        if (e.touches && e.touches.length > 0) {
-            onPointerDown({
-                target: e.target,
-                clientX: e.touches[0].clientX,
-                clientY: e.touches[0].clientY,
-                pointerId: 1
-            });
-        }
-    }, { passive: true });
-
-    boardEl.addEventListener("touchmove", (e) => {
-        if (isSwipingPath && e.touches && e.touches.length > 0) {
-            if (e.cancelable) e.preventDefault();
-            onPointerMove({
-                clientX: e.touches[0].clientX,
-                clientY: e.touches[0].clientY
-            });
-        }
-    }, { passive: false });
-
-    boardEl.addEventListener("touchend", (e) => {
-        if (isSwipingPath) {
-            onPointerUp(e);
-        }
-    }, { passive: true });
 }
 
 function openLevelSelectModal() {
@@ -535,6 +507,32 @@ function resolveInitialMatches() {
     }
 }
 
+/* --- Exact Mathematical Coordinate Hit Detection for Touch & Mouse --- */
+
+function getTileFromCoords(clientX, clientY) {
+    const tileMatrixEl = getTileMatrixContainer();
+    if (!tileMatrixEl) return null;
+    const rect = tileMatrixEl.getBoundingClientRect();
+
+    if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+        return null;
+    }
+
+    const relX = clientX - rect.left;
+    const relY = clientY - rect.top;
+
+    const colWidth = rect.width / GRID_COLS;
+    const rowHeight = rect.height / GRID_ROWS;
+
+    const col = Math.floor(relX / colWidth);
+    const row = Math.floor((rect.height - relY) / rowHeight);
+
+    if (col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS) {
+        return grid[col][row];
+    }
+    return null;
+}
+
 /* --- Drag & Swap / Path Word Tracing System --- */
 
 function onPointerDown(e) {
@@ -544,21 +542,17 @@ function onPointerDown(e) {
     boardEl.querySelectorAll(".tile.selected").forEach(el => el.classList.remove("selected"));
     swipePath = [];
 
-    const tileEl = e.target.closest(".tile");
     // Unmute/resume AudioContext on first interact
     audio.init();
 
-    if (tileEl) {
-        const id = parseInt(tileEl.dataset.id);
-        const tile = getTileById(id);
-        if (!tile) return;
+    const tile = getTileFromCoords(e.clientX, e.clientY) || (e.target ? getTileById(parseInt(e.target.closest(".tile")?.dataset?.id)) : null);
 
+    if (tile) {
         isSwipingPath = true;
         swipePath.push(tile);
         tile.el.classList.add("selected");
         audio.playClick();
 
-        // Lock pointer capture if supported
         if (e.target && typeof e.target.setPointerCapture === "function" && e.pointerId !== undefined) {
             try { e.target.setPointerCapture(e.pointerId); } catch(err) {}
         }
@@ -569,15 +563,7 @@ function onPointerDown(e) {
 function onPointerMove(e) {
     if (!isSwipingPath) return;
 
-    // Find active element under pointer coordinates
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (!el) return;
-
-    const tileEl = el.closest(".tile");
-    if (!tileEl) return;
-
-    const id = parseInt(tileEl.dataset.id);
-    const tile = getTileById(id);
+    const tile = getTileFromCoords(e.clientX, e.clientY);
     if (!tile) return;
 
     const lastTile = swipePath[swipePath.length - 1];
@@ -600,19 +586,6 @@ function onPointerMove(e) {
     const dy = Math.abs(tile.y - lastTile.y);
     const isAdjacent = (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
     if (!isAdjacent) return;
-
-    // 4. Straight-line constraint (lock path to vertical or horizontal)
-    if (swipePath.length >= 2) {
-        const firstTile = swipePath[0];
-        const isHorizontal = firstTile.y === lastTile.y;
-        if (isHorizontal) {
-            // Must stay on same row
-            if (tile.y !== firstTile.y) return;
-        } else {
-            // Must stay on same column
-            if (tile.x !== firstTile.x) return;
-        }
-    }
 
     // Accept tile into path
     swipePath.push(tile);
