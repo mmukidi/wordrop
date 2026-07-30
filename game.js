@@ -27,9 +27,36 @@ let highScore = 0;
 let level = 1;
 let wordsClearedCount = 0;
 let isPlaying = false;
-let isPaused = false;
-let isBoardLocked = false;
-let tileIdCounter = 0;
+let lockWatchdogTimer = null;
+
+function setBoardLock(locked) {
+    isBoardLocked = locked;
+    if (lockWatchdogTimer) clearTimeout(lockWatchdogTimer);
+
+    if (locked) {
+        // Watchdog: If board stays locked for > 2.0s, force unlock to guarantee no freezing
+        lockWatchdogTimer = setTimeout(() => {
+            if (isBoardLocked) {
+                console.warn("[Wordrop Watchdog] Board locked state timed out. Forcing unlock.");
+                forceUnlockBoard();
+            }
+        }, 2000);
+    }
+}
+
+function forceUnlockBoard() {
+    isBoardLocked = false;
+    isSwipingPath = false;
+    swipePath = [];
+    if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Clear stuck CSS classes across all tiles
+    if (boardEl) {
+        boardEl.querySelectorAll(".tile.swapping, .tile.selected, .tile.dragging").forEach(el => {
+            el.classList.remove("swapping", "selected", "dragging");
+        });
+    }
+}
 
 // Grid Rise Timer State
 let riseProgress = 0; // 0 to 100
@@ -562,42 +589,48 @@ function getTileById(id) {
 }
 
 async function executeSwap(tileA, targetCol, targetRow) {
-    isBoardLocked = true;
-    const tileB = grid[targetRow][targetCol];
+    setBoardLock(true);
+    try {
+        const tileB = grid[targetRow][targetCol];
+        audio.playSwap();
 
-    audio.playSwap();
+        // 1. Swap positions in matrix
+        grid[tileA.y][tileA.x] = tileB;
+        grid[targetRow][targetCol] = tileA;
 
-    // 1. Swap positions in matrix
-    grid[tileA.y][tileA.x] = tileB;
-    grid[targetRow][targetCol] = tileA;
+        // 2. Animate swap visually via CSS variables
+        tileA.el.classList.add("swapping");
+        tileA.el.style.setProperty("--col", targetCol);
+        tileA.el.style.setProperty("--row", targetRow);
 
-    // 2. Animate swap visually via CSS variables
-    tileA.el.classList.add("swapping");
-    tileA.el.style.setProperty("--col", targetCol);
-    tileA.el.style.setProperty("--row", targetRow);
+        if (tileB) {
+            tileB.el.classList.add("swapping");
+            tileB.el.style.setProperty("--col", tileA.x);
+            tileB.el.style.setProperty("--row", tileA.y);
+            
+            // Update tileB coordinates
+            tileB.x = tileA.x;
+            tileB.y = tileA.y;
+        }
 
-    if (tileB) {
-        tileB.el.classList.add("swapping");
-        tileB.el.style.setProperty("--col", tileA.x);
-        tileB.el.style.setProperty("--row", tileA.y);
-        
-        // Update tileB coordinates
-        tileB.x = tileA.x;
-        tileB.y = tileA.y;
+        // Update tileA coordinates
+        tileA.x = targetCol;
+        tileA.y = targetRow;
+
+        // Wait for slide animation (150ms)
+        await delay(150);
+
+        tileA.el.classList.remove("swapping");
+        if (tileB) tileB.el.classList.remove("swapping");
+
+        // 3. Scan and cascade matches
+        await resolveBoardCascades();
+    } catch (err) {
+        console.error("Error during executeSwap:", err);
+        forceUnlockBoard();
+    } finally {
+        setBoardLock(false);
     }
-
-    // Update tileA coordinates
-    tileA.x = targetCol;
-    tileA.y = targetRow;
-
-    // Wait for slide animation (150ms)
-    await delay(150);
-
-    tileA.el.classList.remove("swapping");
-    if (tileB) tileB.el.classList.remove("swapping");
-
-    // 3. Scan and cascade matches
-    await resolveBoardCascades();
 }
 
 /* --- Word Scanning & Cascading Engine --- */
@@ -624,49 +657,69 @@ function scanForWords() {
         findWordsInLine(colTiles, "vertical", wordsFound, matchedCoords);
     }
 
-    return { matches: wordsFound, coordsToClear: Array.from(matchedCoords) };
+    return {
+        matches: wordsFound,
+        matchedCoords: matchedCoords
+    };
 }
 
-function findWordsInLine(tiles, direction, wordsFound, matchedCoords) {
-    const len = tiles.length;
-    
-    // Slide sliding window from longest possible length down to minimum 3
-    for (let size = len; size >= 3; size--) {
-        for (let start = 0; start <= len - size; start++) {
-            const windowTiles = tiles.slice(start, start + size);
-            if (windowTiles.some(t => t === null)) continue; // Must be continuous letters
+function findWordsInLine(lineTiles, direction, wordsFound, matchedCoords) {
+    for (let start = 0; start < lineTiles.length; start++) {
+        // Look for contiguous blocks of non-null tiles
+        if (lineTiles[start] === null) continue;
 
-            const wordStr = windowTiles.map(t => t.letter).join("").toLowerCase();
-            
-            if (validator.isValidWord(wordStr)) {
-                // Save word details
-                wordsFound.push({
-                    word: wordStr,
-                    tiles: windowTiles,
-                    direction: direction
-                });
+        let end = start;
+        while (end < lineTiles.length && lineTiles[end] !== null) {
+            end++;
+        }
+
+        const segment = lineTiles.slice(start, end);
+        if (segment.length < 3) {
+            start = end;
+            continue;
+        }
+
+        // Scan windows from longest to shortest (greedy match)
+        for (let size = segment.length; size >= 3; size--) {
+            for (let windowStart = 0; windowStart <= segment.length - size; windowStart++) {
+                const windowTiles = segment.slice(windowStart, windowStart + size);
+                const wordStr = windowTiles.map(t => t.letter).join("").toLowerCase();
                 
-                // Add coordinates
-                windowTiles.forEach(t => matchedCoords.add(`${t.x},${t.y}`));
-                
-                // Skip windows that overlap the rest of this word (avoid sub-word matches in same line)
-                start += size - 1;
+                if (validator.isValidWord(wordStr)) {
+                    // Save word details
+                    wordsFound.push({
+                        word: wordStr,
+                        tiles: windowTiles,
+                        direction: direction
+                    });
+                    
+                    // Add coordinates
+                    windowTiles.forEach(t => matchedCoords.add(`${t.x},${t.y}`));
+                    
+                    // Skip windows that overlap the rest of this word (avoid sub-word matches in same line)
+                    start += size - 1;
+                }
             }
         }
     }
 }
 
 async function resolveBoardCascades() {
-    // Clear any previous hint highlights
-    const oldHints = boardEl.querySelectorAll(".tile.hint-highlight");
-    oldHints.forEach(t => t.classList.remove("hint-highlight"));
+    try {
+        // Clear any previous hint highlights
+        const oldHints = boardEl.querySelectorAll(".tile.hint-highlight");
+        oldHints.forEach(t => t.classList.remove("hint-highlight"));
 
-    const { matches } = scanForWords();
-    activeMatches = matches;
-    isBoardLocked = false;
+        const { matches } = scanForWords();
+        activeMatches = matches;
 
-    // Check danger status
-    updateDangerGlow();
+        // Check danger status
+        updateDangerGlow();
+    } catch (err) {
+        console.error("Error during resolveBoardCascades:", err);
+    } finally {
+        setBoardLock(false);
+    }
 }
 
 function triggerHint() {
@@ -710,7 +763,7 @@ function triggerHint() {
 }
 
 async function sliceClearWord(match) {
-    isBoardLocked = true;
+    setBoardLock(true);
     
     // Play sounds: blade slash whoosh + acoustic burst pop + chime
     audio.playSlash();
@@ -776,12 +829,18 @@ async function sliceClearWord(match) {
 
     // Trigger gravity and scan for cascaded combinations after halves slide away (350ms)
     setTimeout(async () => {
-        const cascaded = applyGravity();
-        if (cascaded) {
-            await delay(200);
+        try {
+            const cascaded = applyGravity();
+            if (cascaded) {
+                await delay(200);
+            }
+            await resolveBoardCascades();
+        } catch (err) {
+            console.error("Error in sliceClearWord cascade:", err);
+            forceUnlockBoard();
+        } finally {
+            setBoardLock(false);
         }
-        
-        await resolveBoardCascades();
     }, 350);
 }
 
@@ -919,6 +978,8 @@ function triggerVortex() {
         return;
     }
 
+    setBoardLock(true);
+
     // Deduct 25 pts
     updateScore(-25);
     audio.playSlash();
@@ -939,8 +1000,15 @@ function triggerVortex() {
 
     // Apply gravity
     setTimeout(async () => {
-        applyGravity();
-        await resolveBoardCascades();
+        try {
+            applyGravity();
+            await resolveBoardCascades();
+        } catch (err) {
+            console.error("Error in triggerVortex:", err);
+            forceUnlockBoard();
+        } finally {
+            setBoardLock(false);
+        }
     }, 250);
 }
 
@@ -982,39 +1050,45 @@ function startRiseTimer() {
 }
 
 async function pushGridUp() {
-    isBoardLocked = true;
-
-    // 1. Check for Game Over: Is any tile at Row 13 (top boundary)?
-    for (let x = 0; x < GRID_COLS; x++) {
-        if (grid[GRID_ROWS - 1][x] !== null) {
-            triggerGameOver();
-            return;
-        }
-    }
-
-    // 2. Shift all existing tiles up
-    for (let y = GRID_ROWS - 2; y >= 0; y--) {
+    setBoardLock(true);
+    try {
+        // 1. Check for Game Over: Is any tile at Row 13 (top boundary)?
         for (let x = 0; x < GRID_COLS; x++) {
-            const tile = grid[y][x];
-            if (tile) {
-                grid[y + 1][x] = tile;
-                grid[y][x] = null;
-                tile.y = y + 1;
-                tile.el.style.setProperty("--row", y + 1);
+            if (grid[GRID_ROWS - 1][x] !== null) {
+                triggerGameOver();
+                return;
             }
         }
+
+        // 2. Shift all existing tiles up
+        for (let y = GRID_ROWS - 2; y >= 0; y--) {
+            for (let x = 0; x < GRID_COLS; x++) {
+                const tile = grid[y][x];
+                if (tile) {
+                    grid[y + 1][x] = tile;
+                    grid[y][x] = null;
+                    tile.y = y + 1;
+                    tile.el.style.setProperty("--row", y + 1);
+                }
+            }
+        }
+
+        // 3. Spawn new row at bottom (Row 0)
+        for (let x = 0; x < GRID_COLS; x++) {
+            spawnTile(x, 0);
+        }
+
+        // Wait for shifts (150ms)
+        await delay(150);
+
+        // 4. Resolve matches created by the rise
+        await resolveBoardCascades();
+    } catch (err) {
+        console.error("Error during pushGridUp:", err);
+        forceUnlockBoard();
+    } finally {
+        setBoardLock(false);
     }
-
-    // 3. Spawn new row at bottom (Row 0)
-    for (let x = 0; x < GRID_COLS; x++) {
-        spawnTile(x, 0);
-    }
-
-    // Wait for shifts (180ms)
-    await delay(180);
-
-    // 4. Resolve matches created by the rise
-    await resolveBoardCascades();
 }
 
 function updateDangerGlow() {
@@ -1043,55 +1117,59 @@ function updateDangerGlow() {
 async function triggerShuffle() {
     if (!isPlaying || isPaused || isBoardLocked || shuffleCooldownActive) return;
     
-    isBoardLocked = true;
-    audio.playClick();
-    
-    // Gather all active tiles on the board
-    const tilesList = [];
-    for (let y = 0; y < GRID_ROWS; y++) {
-        for (let x = 0; x < GRID_COLS; x++) {
-            if (grid[y][x]) {
-                tilesList.push(grid[y][x]);
+    setBoardLock(true);
+    try {
+        audio.playClick();
+        
+        // Gather all active tiles on the board
+        const tilesList = [];
+        for (let y = 0; y < GRID_ROWS; y++) {
+            for (let x = 0; x < GRID_COLS; x++) {
+                if (grid[y][x]) {
+                    tilesList.push(grid[y][x]);
+                }
             }
         }
+
+        if (tilesList.length === 0) return;
+
+        // Clear matrix references
+        grid = Array(GRID_ROWS).fill(null).map(() => Array(GRID_COLS).fill(null));
+
+        // Fisher-Yates shuffle positions
+        const positions = tilesList.map(t => ({ x: t.x, y: t.y }));
+        shuffleArray(positions);
+
+        // Assign new positions
+        tilesList.forEach((tile, index) => {
+            const newPos = positions[index];
+            tile.x = newPos.x;
+            tile.y = newPos.y;
+            grid[newPos.y][newPos.x] = tile;
+            
+            tile.el.classList.add("swapping");
+            tile.el.style.setProperty("--col", newPos.x);
+            tile.el.style.setProperty("--row", newPos.y);
+        });
+
+        // Spark visual effect from center
+        audio.playSwap();
+
+        await delay(200);
+
+        tilesList.forEach(t => t.el.classList.remove("swapping"));
+
+        // Activate cooldown
+        startShuffleCooldown();
+
+        // Check for words created by shuffle
+        await resolveBoardCascades();
+    } catch (err) {
+        console.error("Error during triggerShuffle:", err);
+        forceUnlockBoard();
+    } finally {
+        setBoardLock(false);
     }
-
-    if (tilesList.length === 0) {
-        isBoardLocked = false;
-        return;
-    }
-
-    // Clear matrix references
-    grid = Array(GRID_ROWS).fill(null).map(() => Array(GRID_COLS).fill(null));
-
-    // Fisher-Yates shuffle positions
-    const positions = tilesList.map(t => ({ x: t.x, y: t.y }));
-    shuffleArray(positions);
-
-    // Assign new positions
-    tilesList.forEach((tile, index) => {
-        const newPos = positions[index];
-        tile.x = newPos.x;
-        tile.y = newPos.y;
-        grid[newPos.y][newPos.x] = tile;
-        
-        tile.el.classList.add("swapping");
-        tile.el.style.setProperty("--col", newPos.x);
-        tile.el.style.setProperty("--row", newPos.y);
-    });
-
-    // Spark visual effect from center
-    audio.playSwap();
-
-    await delay(200);
-
-    tilesList.forEach(t => t.el.classList.remove("swapping"));
-
-    // Activate cooldown
-    startShuffleCooldown();
-
-    // Check for words created by shuffle
-    await resolveBoardCascades();
 }
 
 function startShuffleCooldown() {
