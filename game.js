@@ -528,7 +528,7 @@ function getTileFromCoords(clientX, clientY) {
     const row = Math.floor((rect.height - relY) / rowHeight);
 
     if (col >= 0 && col < GRID_COLS && row >= 0 && row < GRID_ROWS) {
-        return grid[col][row];
+        return grid[row][col];
     }
     return null;
 }
