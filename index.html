@@ -8,7 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260729_2308">
+    <link rel="stylesheet" href="style.css?v=20260729_2312">
 </head>
 <body>
     <div class="game-wrapper">
@@ -29,6 +29,24 @@
                 </div>
             </div>
         </header>
+
+        <!-- Controls & Power-ups (Moved to Top) -->
+        <div class="game-footer top-controls">
+            <button id="btn-hint" class="powerup-btn hint-btn" title="Highlight a word (-10 pts)">
+                <div class="powerup-icon">💡</div>
+                <div class="powerup-label">HINT (-10)</div>
+            </button>
+
+            <button id="btn-shuffle" class="powerup-btn" title="Scramble all tiles on the board">
+                <div class="powerup-icon">🌀</div>
+                <div class="powerup-label">SHUFFLE</div>
+                <div id="shuffle-cooldown" class="cooldown-overlay"></div>
+            </button>
+            
+            <button id="btn-pause" class="control-btn" title="Pause Game">⏸️</button>
+            <button id="btn-sound" class="control-btn" title="Toggle Sound">🔊</button>
+            <button id="btn-restart" class="control-btn" title="Reset Game">🔄</button>
+        </div>
 
         <!-- Timer / Rise Bar -->
         <div class="timer-container">
@@ -61,34 +79,10 @@
                     <div class="grid-backdrop"></div>
                 </div>
 
-                <!-- Glass Floor Foundation (0% Tile Overlap) -->
-                <div class="broken-glass-floor">
-                    <div class="glass-shard"></div>
-                    <div class="glass-shard"></div>
-                    <div class="glass-shard"></div>
-                    <div class="glass-shard"></div>
-                    <div class="glass-shard"></div>
-                </div>
+                <!-- Clean Glass Floor Bar (0% Tile Overlap) -->
+                <div class="broken-glass-floor"></div>
             </div>
         </main>
-
-        <!-- Bottom Controls & Power-ups -->
-        <footer class="game-footer">
-            <button id="btn-hint" class="powerup-btn hint-btn" title="Highlight a word (-10 pts)">
-                <div class="powerup-icon">💡</div>
-                <div class="powerup-label">HINT (-10)</div>
-            </button>
-
-            <button id="btn-shuffle" class="powerup-btn" title="Scramble all tiles on the board">
-                <div class="powerup-icon">🌀</div>
-                <div class="powerup-label">SHUFFLE</div>
-                <div id="shuffle-cooldown" class="cooldown-overlay"></div>
-            </button>
-            
-            <button id="btn-pause" class="control-btn" title="Pause Game">⏸️</button>
-            <button id="btn-sound" class="control-btn" title="Toggle Sound">🔊</button>
-            <button id="btn-restart" class="control-btn" title="Reset Game">🔄</button>
-        </footer>
     </div>
 
     <!-- Pause Screen Overlay -->
@@ -125,6 +119,6 @@
         </div>
     </div>
 
-    <script type="module" src="game.js?v=20260729_2308"></script>
+    <script type="module" src="game.js?v=20260729_2312"></script>
 </body>
 </html>
