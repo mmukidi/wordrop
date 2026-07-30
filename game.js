@@ -27,6 +27,9 @@ let highScore = 0;
 let level = 1;
 let wordsClearedCount = 0;
 let isPlaying = false;
+let isPaused = false;
+let isBoardLocked = false;
+let tileIdCounter = 0;
 let lockWatchdogTimer = null;
 
 function setBoardLock(locked) {
