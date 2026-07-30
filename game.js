@@ -161,10 +161,15 @@ function initDOMElements() {
     statsLongestWordEl = document.getElementById("stats-longest-word");
     statsRareCountEl = document.getElementById("stats-rare-count");
     statsHighScoreEl = document.getElementById("stats-high-score");
+    gamerTagInput = document.getElementById("gamer-tag-input");
 
     comboBadge = document.getElementById("combo-badge");
     wordPopup = document.getElementById("word-popup");
 }
+
+let gamerTagInput;
+let gamerTag = localStorage.getItem("wordrop_gamer_tag") || ("WordRunner_" + Math.floor(1000 + Math.random() * 9000));
+localStorage.setItem("wordrop_gamer_tag", gamerTag);
 
 /* --- Initialization --- */
 
@@ -172,6 +177,12 @@ async function initGame() {
     initDOMElements();
     highScore = parseInt(localStorage.getItem("wordrop_high_score")) || 0;
     if (highScoreValEl) highScoreValEl.textContent = formatScore(highScore);
+
+    // Sync Gamer Tag with input & Sentry context
+    if (gamerTagInput) gamerTagInput.value = gamerTag;
+    if (window.Sentry && typeof Sentry.setUser === "function") {
+        Sentry.setUser({ username: gamerTag, id: gamerTag });
+    }
 
     // Initialize Swipe Canvas
     canvas = document.getElementById("swipe-canvas");
@@ -267,6 +278,17 @@ function setupEventListeners() {
 
     if (levelBtn) levelBtn.addEventListener("click", openLevelSelectModal);
     if (btnCloseLevelSelect) btnCloseLevelSelect.addEventListener("click", closeLevelSelectModal);
+
+    if (gamerTagInput) {
+        gamerTagInput.addEventListener("change", (e) => {
+            const newTag = e.target.value.trim() || ("WordRunner_" + Math.floor(1000 + Math.random() * 9000));
+            gamerTag = newTag;
+            localStorage.setItem("wordrop_gamer_tag", gamerTag);
+            if (window.Sentry && typeof Sentry.setUser === "function") {
+                Sentry.setUser({ username: gamerTag, id: gamerTag });
+            }
+        });
+    }
 
     document.querySelectorAll(".level-select-btn").forEach(btn => {
         btn.addEventListener("click", (e) => {
