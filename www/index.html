@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Wordrop — Stack, Spell, & Survive</title>
+    <link rel="icon" type="image/jpeg" href="assets/app_icon.jpg">
+    <link rel="apple-touch-icon" href="assets/app_icon.jpg">
+    <!-- Google Fonts for Outfit (Sci-fi head) and Inter (Clean body/tiles) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css?v=20260730_1151">
+    <!-- Sentry Production Error Tracking SDK -->
+    <script src="https://browser.sentry-cdn.com/7.114.0/bundle.min.js" crossorigin="anonymous"></script>
+    <script>
+        if (window.Sentry) {
+            Sentry.init({
+                dsn: "https://7e336893321c8404829ea3eb6f4edfb3@o4511822184185856.ingest.us.sentry.io/4511822190608384",
+                tracesSampleRate: 1.0,
+                environment: "production"
+            });
+            console.log("Sentry production error tracking active.");
+        }
+    </script>
+</head>
+<body>
+    <div class="game-wrapper">
+        <!-- Game Header -->
+        <header class="game-header">
+            <div class="brand">
+                <h1 class="game-title">WORDROP</h1>
+                <div class="level-indicator clickable" id="level-btn" title="Select Level (1-10)">LEVEL <span id="level-val">1</span> ▼</div>
+            </div>
+            <div class="stats">
+                <div class="stat-box">
+                    <span class="stat-label">SCORE</span>
+                    <span id="score-val" class="stat-value">000000</span>
+                </div>
+                <div class="stat-box">
+                    <span class="stat-label">HIGH</span>
+                    <span id="high-score-val" class="stat-value">000000</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Controls & Power-ups (Top Bar for Gamers) -->
+        <div class="game-footer top-controls">
+            <button id="btn-hint" class="powerup-btn hint-btn" title="Highlight a word (-10 pts)">
+                <div class="powerup-icon">💡</div>
+                <div class="powerup-label">HINT (-10)</div>
+            </button>
+
+            <button id="btn-shuffle" class="powerup-btn" title="Scramble all tiles on the board">
+                <div class="powerup-icon">🌀</div>
+                <div class="powerup-label">SHUFFLE</div>
+                <div id="shuffle-cooldown" class="cooldown-overlay"></div>
+            </button>
+
+            <button id="btn-vortex" class="powerup-btn vortex-btn" title="Clear bottom row (-25 pts)">
+                <div class="powerup-icon">🔥</div>
+                <div class="powerup-label">VORTEX (-25)</div>
+            </button>
+
+            <button id="btn-info" class="control-btn" title="How to Play & Tips">ℹ️</button>
+            <button id="btn-stats" class="control-btn" title="Gamer Statistics">📊</button>
+            <button id="btn-pause" class="control-btn" title="Pause Game">⏸️</button>
+            <button id="btn-sound" class="control-btn" title="Toggle Sound">🔊</button>
+            <button id="btn-restart" class="control-btn" title="Reset Game">🔄</button>
+        </div>
+
+        <!-- Timer / Rise Bar with Digital Countdown -->
+        <div class="timer-container">
+            <div class="timer-label">NEXT RISE <span id="timer-countdown-val" class="timer-countdown">15s</span></div>
+            <div class="timer-track">
+                <div id="timer-bar" class="timer-bar"></div>
+            </div>
+        </div>
+
+        <!-- Last Spelled Word HUD -->
+        <div class="last-word-container">
+            <span class="last-word-label">LAST WORD:</span>
+            <span id="last-word-text" class="last-word-text">—</span>
+            <span id="last-word-score" class="last-word-score"></span>
+        </div>
+
+        <!-- Notification Banner / Combo Indicator -->
+        <div class="notification-container">
+            <div id="combo-badge" class="combo-badge hidden">COMBO 2x!</div>
+            <div id="word-popup" class="word-popup hidden">CLEAR!</div>
+        </div>
+
+        <!-- The Game Board Grid -->
+        <main class="board-container">
+            <div class="board-wrapper">
+                <div id="game-board" class="game-board">
+                    <!-- Tile Matrix Container (100% - 24px height, zero tile clipping) -->
+                    <div id="tile-matrix" class="tile-matrix">
+                        <!-- Swipe cutting trail canvas -->
+                        <canvas id="swipe-canvas"></canvas>
+                        <!-- Dynamic grid lines -->
+                        <div class="grid-backdrop"></div>
+                    </div>
+
+                    <!-- Thick Solid Cyberpunk Floor Bar -->
+                    <div class="thick-floor-bar">
+                        <span class="floor-hazard-label">BASELINE</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Gamer Statistics Modal Overlay -->
+    <div id="stats-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2>📊 GAMER STATS</h2>
+
+            <div class="gamer-tag-box">
+                <span class="gamer-tag-label">👤 GAMER TAG:</span>
+                <input type="text" id="gamer-tag-input" class="gamer-tag-input" placeholder="Enter Nickname" maxlength="15">
+            </div>
+
+            <div class="final-stats">
+                <div class="final-stat-item">
+                    <span class="label">WORDS CLEARED</span>
+                    <span id="stats-words-count" class="value">0</span>
+                </div>
+                <div class="final-stat-item">
+                    <span class="label">LONGEST WORD</span>
+                    <span id="stats-longest-word" class="value">—</span>
+                </div>
+                <div class="final-stat-item">
+                    <span class="label">RARE TILES CLEARED</span>
+                    <span id="stats-rare-count" class="value">0</span>
+                </div>
+                <div class="final-stat-item">
+                    <span class="label">HIGH SCORE</span>
+                    <span id="stats-high-score" class="value">000,000</span>
+                </div>
+            </div>
+            <button id="btn-close-stats" class="action-btn primary">CLOSE</button>
+        </div>
+    </div>
+
+    <!-- How to Play & Info Modal Overlay -->
+    <div id="info-overlay" class="overlay hidden">
+        <div class="overlay-content info-content">
+            <h2>ℹ️ HOW TO PLAY & TIPS</h2>
+            
+            <div class="info-scroll-body">
+                <div class="info-section">
+                    <h3>🎮 SWIPE MECHANICS</h3>
+                    <p>• <b>Spell Words (3+ Tiles):</b> Drag across 3 or more letters in a straight line (horizontally or vertically) to form a word and clear them!</p>
+                    <p>• <b>Swap Tiles (2 Tiles):</b> Drag across 2 adjacent tiles to swap their positions.</p>
+                    <p>• <b>Backtrack:</b> Drag backward along your swipe path to undo letter selections.</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>⭐ SCORING & RARITIES</h3>
+                    <p>• Each letter has a point value in the corner (e.g. <b>A=1</b>, <b>Z=9</b>, <b>Q=9</b>).</p>
+                    <p>• <b>Blue Tiles:</b> Common letters.</p>
+                    <p>• <b>Purple Tiles:</b> Uncommon letters.</p>
+                    <p>• <b>Glowing Gold Tiles:</b> Rare high-value letters!</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>⚡ POWER-UPS</h3>
+                    <p>• 💡 <b>HINT (-10 pts):</b> Highlights a valid word on your board for 3.5s.</p>
+                    <p>• 🌀 <b>SHUFFLE:</b> Scrambles all active tiles on the grid.</p>
+                    <p>• 🔥 <b>VORTEX (-25 pts):</b> Vaporizes the bottom row when tiles get high.</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>💡 PRO TIPS</h3>
+                    <p>• Reaching <b>100 Points</b> or <b>4 Words</b> unlocks Level 2 and awards a timer reset!</p>
+                    <p>• Don't let letters reach the top boundary (Row 13), or it's Game Over!</p>
+                </div>
+            </div>
+
+            <button id="btn-close-info" class="action-btn primary">GOT IT!</button>
+        </div>
+    </div>
+
+    <!-- Level Selector Modal Overlay (Levels 1 to 10) -->
+    <div id="level-select-overlay" class="overlay hidden">
+        <div class="overlay-content level-select-content">
+            <h2>🎯 SELECT LEVEL</h2>
+            <p>Higher levels rise 3s faster but award +50% more points per word!</p>
+            
+            <div class="level-grid">
+                <button class="level-select-btn active" data-lvl="1">
+                    <span class="lvl-title">LVL 1</span>
+                    <span class="lvl-detail">15s • 1.0x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="2">
+                    <span class="lvl-title">LVL 2</span>
+                    <span class="lvl-detail">12s • 1.5x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="3">
+                    <span class="lvl-title">LVL 3</span>
+                    <span class="lvl-detail">9s • 2.0x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="4">
+                    <span class="lvl-title">LVL 4</span>
+                    <span class="lvl-detail">6s • 2.5x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="5">
+                    <span class="lvl-title">LVL 5</span>
+                    <span class="lvl-detail">4.5s • 3.0x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="6">
+                    <span class="lvl-title">LVL 6</span>
+                    <span class="lvl-detail">3.5s • 3.5x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="7">
+                    <span class="lvl-title">LVL 7</span>
+                    <span class="lvl-detail">3.0s • 4.0x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="8">
+                    <span class="lvl-title">LVL 8</span>
+                    <span class="lvl-detail">2.5s • 4.5x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="9">
+                    <span class="lvl-title">LVL 9</span>
+                    <span class="lvl-detail">2.0s • 5.0x Pts</span>
+                </button>
+                <button class="level-select-btn" data-lvl="10">
+                    <span class="lvl-title">LVL 10 🔥</span>
+                    <span class="lvl-detail">1.5s • 5.5x Pts</span>
+                </button>
+            </div>
+
+            <button id="btn-close-level-select" class="action-btn primary">CONFIRM LEVEL</button>
+        </div>
+    </div>
+
+    <!-- Pause Screen Overlay -->
+    <div id="pause-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2>GAME PAUSED</h2>
+            <p>Take a breath. The letters are waiting.</p>
+            <button id="btn-resume" class="action-btn">RESUME</button>
+        </div>
+    </div>
+
+    <!-- Game Over Overlay -->
+    <div id="game-over-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <h2 class="game-over-title">GRID OVERFLOW</h2>
+            <p class="game-over-subtitle">The letters reached the top!</p>
+            
+            <div class="final-stats">
+                <div class="final-stat-item">
+                    <span class="label">FINAL SCORE</span>
+                    <span id="final-score" class="value">000,000</span>
+                </div>
+                <div class="final-stat-item">
+                    <span class="label">MAX LEVEL</span>
+                    <span id="final-level" class="value">1</span>
+                </div>
+                <div class="final-stat-item">
+                    <span class="label">WORDS CLEARED</span>
+                    <span id="final-words-count" class="value">0</span>
+                </div>
+            </div>
+
+            <button id="btn-play-again" class="action-btn primary">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <script type="module" src="game.js?v=20260730_1151"></script>
+</body>
+</html>

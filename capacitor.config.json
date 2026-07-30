@@ -1,8 +1,7 @@
 {
   "appId": "com.wordrop.game",
   "appName": "Wordrop",
-  "webDir": ".",
-  "bundledWebRuntime": false,
+  "webDir": "www",
   "ios": {
     "contentInset": "always",
     "allowsLinkPreview": false,
