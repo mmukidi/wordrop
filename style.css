@@ -46,16 +46,18 @@ body {
 
 /* Game Wrapper */
 .game-wrapper {
-    width: 100%;
-    max-width: 440px;
-    height: 100vh;
-    max-height: 920px;
+    width: 100vw;
+    max-width: 480px;
+    height: 100dvh;
+    max-height: 100dvh;
     display: flex;
     flex-direction: column;
-    padding: 16px;
+    padding: 10px 12px;
     background: radial-gradient(circle at center, #1a1a26 0%, var(--bg-dark) 100%);
     box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
     position: relative;
+    box-sizing: border-box;
+    overflow: hidden;
 }
 
 /* Header */
@@ -63,12 +65,12 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
 }
 
 .game-title {
     font-family: 'Outfit', sans-serif;
-    font-size: 28px;
+    font-size: 26px;
     font-weight: 900;
     letter-spacing: 2px;
     background: linear-gradient(to right, var(--neon-cyan), var(--neon-purple));
@@ -100,11 +102,11 @@ body {
     background: var(--bg-card);
     border: 1px solid rgba(255, 255, 255, 0.05);
     border-radius: 6px;
-    padding: 6px 10px;
+    padding: 4px 8px;
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    min-width: 80px;
+    min-width: 75px;
 }
 
 .stat-label {
@@ -116,7 +118,7 @@ body {
 
 .stat-value {
     font-family: 'Outfit', sans-serif;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 900;
     color: #fff;
 }
@@ -126,9 +128,9 @@ body {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
     background: rgba(255, 255, 255, 0.02);
-    padding: 6px 10px;
+    padding: 4px 8px;
     border-radius: 6px;
 }
 
@@ -162,8 +164,8 @@ body {
 /* Notifications (Combo / Cleared) */
 .notification-container {
     position: relative;
-    height: 32px;
-    margin-bottom: 8px;
+    height: 28px;
+    margin-bottom: 6px;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -197,30 +199,63 @@ body {
     display: none !important;
 }
 
-/* Board Container */
+/* Board Container & Responsive Sizing */
 .board-container {
-    flex-grow: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     display: flex;
     justify-content: center;
     align-items: center;
     position: relative;
     width: 100%;
-    margin-bottom: 16px;
+    margin-bottom: 8px;
     overflow: hidden;
 }
 
 .game-board {
     position: relative;
-    width: 100%;
-    /* Keep 8:14 Aspect Ratio exactly */
-    aspect-ratio: 8 / 14;
+    height: 100%;
     max-height: 100%;
-    background: rgba(10, 10, 14, 0.85);
+    aspect-ratio: 8 / 14;
+    width: auto;
+    max-width: 100%;
+    background: rgba(10, 10, 14, 0.92);
     border: 2px solid var(--border-glow);
-    box-shadow: 0 0 30px rgba(0, 240, 255, 0.05), inset 0 0 20px rgba(0, 0, 0, 0.8);
+    box-shadow: 0 0 30px rgba(0, 240, 255, 0.08), inset 0 0 25px rgba(0, 0, 0, 0.85);
     border-radius: 12px;
     overflow: hidden;
 }
+
+/* Broken Glass Baseline Floor */
+.broken-glass-floor {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 28px;
+    pointer-events: none;
+    z-index: 5;
+    background: linear-gradient(to top, rgba(0, 240, 255, 0.2), transparent);
+    border-top: 2px dashed rgba(0, 240, 255, 0.7);
+    box-shadow: 0 0 15px rgba(0, 240, 255, 0.4), inset 0 2px 10px rgba(0, 240, 255, 0.3);
+    overflow: hidden;
+}
+
+/* Glass Shards Overlay */
+.glass-shard {
+    position: absolute;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(0, 240, 255, 0.15));
+    border: 1px solid rgba(0, 240, 255, 0.85);
+    box-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+    pointer-events: none;
+}
+
+.glass-shard:nth-child(1) { left: 4%; width: 26px; height: 20px; clip-path: polygon(0 100%, 50% 0, 100% 100%); }
+.glass-shard:nth-child(2) { left: 22%; width: 34px; height: 25px; clip-path: polygon(0 100%, 30% 0, 100% 70%); }
+.glass-shard:nth-child(3) { left: 45%; width: 28px; height: 22px; clip-path: polygon(20% 100%, 60% 0, 100% 100%); }
+.glass-shard:nth-child(4) { left: 68%; width: 36px; height: 26px; clip-path: polygon(0 75%, 45% 0, 100% 100%); }
+.glass-shard:nth-child(5) { left: 88%; width: 28px; height: 18px; clip-path: polygon(0 100%, 75% 0, 100% 100%); }
 
 /* Grid Gridlines Backdrop */
 .grid-backdrop {
@@ -252,8 +287,7 @@ body {
     position: absolute;
     width: calc(100% / 8);
     height: calc(100% / 14);
-    padding: 3px;
-    /* Translate3d is hardware accelerated */
+    padding: 1.5px;
     transform: translate3d(calc(var(--col) * 100%), calc((13 - var(--row)) * 100%), 0);
     transition: transform 0.18s cubic-bezier(0.25, 1, 0.5, 1);
     cursor: grab;
@@ -274,33 +308,33 @@ body {
 .tile-inner {
     width: 100%;
     height: 100%;
-    border-radius: 6px;
+    border-radius: 7px;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     position: relative;
-    border-width: 1px;
+    border-width: 1.5px;
     border-style: solid;
     font-weight: 800;
-    box-shadow: inset 0 0 8px rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.08);
 }
 
 .tile-letter {
-    font-size: 22px;
-    font-weight: 800;
+    font-size: clamp(20px, 3.8vh, 32px);
+    font-weight: 900;
     color: #fff;
     line-height: 1;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+    text-shadow: 0 1px 4px rgba(0,0,0,0.7);
 }
 
 .tile-value {
     position: absolute;
     bottom: 2px;
     right: 4px;
-    font-size: 8px;
-    color: rgba(255, 255, 255, 0.6);
-    font-weight: 600;
+    font-size: clamp(9px, 1.3vh, 12px);
+    color: rgba(255, 255, 255, 0.75);
+    font-weight: 700;
 }
 
 /* Letter Rarity Classes */
