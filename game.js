@@ -782,6 +782,9 @@ function findWordsInLine(lineTiles, direction, wordsFound, matchedCoords) {
 
 async function resolveBoardCascades() {
     try {
+        // ALWAYS run applyGravity() first to guarantee zero floating gaps remain
+        applyGravity();
+
         // Clear any previous hint highlights
         const oldHints = boardEl.querySelectorAll(".tile.hint-highlight");
         oldHints.forEach(t => t.classList.remove("hint-highlight"));
@@ -1004,24 +1007,25 @@ function calculateWordScore(match, comboStreak) {
 
 function applyGravity() {
     let cascaded = false;
+    let keepChecking = true;
     
-    for (let x = 0; x < GRID_COLS; x++) {
-        let emptyY = -1;
-        for (let y = 0; y < GRID_ROWS; y++) {
-            if (grid[y][x] === null) {
-                if (emptyY === -1) {
-                    emptyY = y;
+    // Multi-pass gravity loop: Repeat until no tile has an empty slot underneath it
+    while (keepChecking) {
+        keepChecking = false;
+        for (let x = 0; x < GRID_COLS; x++) {
+            for (let y = 0; y < GRID_ROWS - 1; y++) {
+                if (grid[y][x] === null && grid[y + 1][x] !== null) {
+                    const tile = grid[y + 1][x];
+                    grid[y][x] = tile;
+                    grid[y + 1][x] = null;
+                    
+                    tile.y = y;
+                    if (tile.el) {
+                        tile.el.style.setProperty("--row", y);
+                    }
+                    keepChecking = true;
+                    cascaded = true;
                 }
-            } else if (emptyY !== -1) {
-                // Move down
-                grid[emptyY][x] = grid[y][x];
-                grid[y][x] = null;
-                
-                grid[emptyY][x].y = emptyY;
-                grid[emptyY][x].el.style.setProperty("--row", emptyY);
-                
-                emptyY++;
-                cascaded = true;
             }
         }
     }
@@ -1128,6 +1132,9 @@ function startRiseTimer() {
 async function pushGridUp() {
     setBoardLock(true);
     try {
+        // 0. Ensure all floating tiles are collapsed before rising
+        applyGravity();
+
         // 1. Check for Game Over: Is any tile at Row 13 (top boundary)?
         for (let x = 0; x < GRID_COLS; x++) {
             if (grid[GRID_ROWS - 1][x] !== null) {
