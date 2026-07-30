@@ -178,17 +178,36 @@ async function initGame() {
     highScore = parseInt(localStorage.getItem("wordrop_high_score")) || 0;
     if (highScoreValEl) highScoreValEl.textContent = formatScore(highScore);
 
-    // Sync Gamer Tag with input & Sentry context
+    // Sync Gamer Tag with input field only.
+    // NOTE: deliberately NOT attached to Sentry.setUser() — gamerTag is
+    // free-text the player can set to anything, including their real name,
+    // and our privacy policy promises anonymous crash telemetry. Attaching
+    // a user-editable identifier to error reports would both contradict
+    // that promise and pull avoidable PII into a third-party service.
     if (gamerTagInput) gamerTagInput.value = gamerTag;
-    if (window.Sentry && typeof Sentry.setUser === "function") {
-        Sentry.setUser({ username: gamerTag, id: gamerTag });
-    }
 
     // Initialize Swipe Canvas
     canvas = document.getElementById("swipe-canvas");
     if (canvas) {
         ctx = canvas.getContext("2d");
         resizeSwipeCanvas();
+
+        // Keep the canvas's drawing buffer in lockstep with its actual
+        // rendered size at all times. A single resize-on-load is not
+        // enough: on iOS WKWebView, web fonts finish loading and safe-area
+        // insets settle AFTER this point, which reflows the board's
+        // aspect-ratio-based height without ever firing a window "resize"
+        // event. If the canvas buffer is stamped with a stale size, every
+        // point drawn on it gets silently rescaled to the wrong place,
+        // which is exactly why swipe trails render far from the tiles
+        // that were actually swiped.
+        if (window.ResizeObserver) {
+            const canvasResizeObserver = new ResizeObserver(() => resizeSwipeCanvas());
+            canvasResizeObserver.observe(tileMatrixEl);
+        }
+        if (document.fonts && document.fonts.ready) {
+            document.fonts.ready.then(resizeSwipeCanvas).catch(() => {});
+        }
     }
 
     // Initialize Dictionary async
@@ -208,9 +227,22 @@ if (document.readyState === "loading") {
 }
 
 function resizeSwipeCanvas() {
-    if (canvas) {
-        canvas.width = boardEl.clientWidth;
-        canvas.height = boardEl.clientHeight;
+    if (!canvas) return;
+    // The canvas element's CSS box (width/height: 100%) is sized relative
+    // to its actual parent, #tile-matrix — NOT #game-board, which is 22px
+    // taller because it also contains the floor bar. Sizing the drawing
+    // buffer from boardEl instead of tileMatrixEl silently stretches/
+    // squashes everything drawn on the canvas relative to where the real
+    // tiles (positioned via getBoundingClientRect against boardEl) sit.
+    const target = tileMatrixEl || boardEl;
+    const w = target.clientWidth;
+    const h = target.clientHeight;
+    if (w > 0 && h > 0 && (canvas.width !== w || canvas.height !== h)) {
+        canvas.width = w;
+        canvas.height = h;
+        // Buffer just got wiped by the resize — redraw the active path
+        // immediately so an in-progress swipe doesn't flash empty.
+        if (isSwipingPath && swipePath.length > 0) drawSwipePath();
     }
 }
 window.addEventListener("resize", resizeSwipeCanvas);
@@ -284,9 +316,7 @@ function setupEventListeners() {
             const newTag = e.target.value.trim() || ("WordRunner_" + Math.floor(1000 + Math.random() * 9000));
             gamerTag = newTag;
             localStorage.setItem("wordrop_gamer_tag", gamerTag);
-            if (window.Sentry && typeof Sentry.setUser === "function") {
-                Sentry.setUser({ username: gamerTag, id: gamerTag });
-            }
+            // Not sent to Sentry — see note in initGame().
         });
     }
 
