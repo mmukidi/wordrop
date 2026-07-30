@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import WebKit
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -9,6 +10,15 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Override point for customization after application launch.
         window?.backgroundColor = UIColor(red: 15/255, green: 15/255, blue: 19/255, alpha: 1.0)
+
+        // Clear WKWebView cache to ensure fresh web assets are loaded
+        let dataStore = WKWebsiteDataStore.default()
+        let dataTypes = WKWebsiteDataStore.allWebsiteDataTypes()
+        let sinceDate = Date(timeIntervalSince1970: 0)
+        dataStore.removeData(ofTypes: dataTypes, modifiedSince: sinceDate) {
+            print("[Wordrop] WebView cache cleared")
+        }
+
         return true
     }
 
