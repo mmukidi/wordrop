@@ -310,6 +310,34 @@ function setupEventListeners() {
     boardEl.addEventListener("pointermove", onPointerMove);
     boardEl.addEventListener("pointerup", onPointerUp);
     boardEl.addEventListener("pointercancel", onPointerUp);
+
+    // Native iOS Touch Event Fallbacks to guarantee silky smooth dragging on iPhones
+    boardEl.addEventListener("touchstart", (e) => {
+        if (e.touches && e.touches.length > 0) {
+            onPointerDown({
+                target: e.target,
+                clientX: e.touches[0].clientX,
+                clientY: e.touches[0].clientY,
+                pointerId: 1
+            });
+        }
+    }, { passive: true });
+
+    boardEl.addEventListener("touchmove", (e) => {
+        if (isSwipingPath && e.touches && e.touches.length > 0) {
+            if (e.cancelable) e.preventDefault();
+            onPointerMove({
+                clientX: e.touches[0].clientX,
+                clientY: e.touches[0].clientY
+            });
+        }
+    }, { passive: false });
+
+    boardEl.addEventListener("touchend", (e) => {
+        if (isSwipingPath) {
+            onPointerUp(e);
+        }
+    }, { passive: true });
 }
 
 function openLevelSelectModal() {
@@ -530,8 +558,10 @@ function onPointerDown(e) {
         tile.el.classList.add("selected");
         audio.playClick();
 
-        // Lock pointer capture to active canvas to follow dragging
-        canvas.setPointerCapture(e.pointerId);
+        // Lock pointer capture if supported
+        if (e.target && typeof e.target.setPointerCapture === "function" && e.pointerId !== undefined) {
+            try { e.target.setPointerCapture(e.pointerId); } catch(err) {}
+        }
         drawSwipePath();
     }
 }

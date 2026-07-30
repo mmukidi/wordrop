@@ -41,25 +41,30 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow: hidden;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
 }
 
 /* Game Wrapper */
-/* Game Wrapper */
 .game-wrapper {
-    width: 100vw;
+    width: 100%;
     max-width: 580px;
     height: 100vh;
     height: 100dvh;
     display: flex;
     flex-direction: column;
-    padding: calc(6px + env(safe-area-inset-top, 0px)) 8px calc(6px + env(safe-area-inset-bottom, 10px)) 8px;
+    padding: calc(6px + env(safe-area-inset-top, 0px)) 6px calc(6px + env(safe-area-inset-bottom, 10px)) 6px;
     background: radial-gradient(circle at center, #1a1a26 0%, var(--bg-dark) 100%);
     box-shadow: 0 0 40px rgba(0, 0, 0, 0.8);
     position: relative;
     box-sizing: border-box;
     overflow: hidden;
     justify-content: space-between;
+    touch-action: none;
 }
 
 /* Header */
@@ -238,13 +243,14 @@ body {
     flex: 1 1 0;
     min-height: 0;
     aspect-ratio: 8 / 14;
-    width: auto;
+    width: 100%;
     max-width: 100%;
     background: rgba(10, 10, 14, 0.95);
     border: 2px solid var(--border-glow);
     box-shadow: 0 0 30px rgba(0, 240, 255, 0.08), inset 0 0 25px rgba(0, 0, 0, 0.85);
     border-radius: 12px;
     overflow: hidden;
+    touch-action: none;
 }
 
 /* Tile Matrix Container (Leaves bottom 24px for zero-clipping floor bar) */
