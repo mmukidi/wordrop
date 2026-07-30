@@ -399,7 +399,7 @@ function onPointerMove(e) {
     // Accept tile into path
     swipePath.push(tile);
     tile.el.classList.add("selected");
-    audio.playClick();
+    audio.playSwipeStep(swipePath.length);
     drawSwipePath();
 }
 
@@ -974,20 +974,30 @@ function updateScore(amount) {
         localStorage.setItem("wordrop_high_score", highScore);
     }
 
-    // Check Level Up threshold
-    // Level 1: <1000, Lvl 2: 1000, Lvl 3: 2500, Lvl 4: 5000, Lvl 5: 8500, Lvl 6: 13000...
+    checkLevelProgression();
+}
+
+function checkLevelProgression() {
+    // Level 2 unlock condition: score >= 100 OR wordsClearedCount >= 4
     let targetLevel = 1;
-    if (score >= 13000) targetLevel = 6 + Math.floor((score - 13000) / 8000);
-    else if (score >= 8500) targetLevel = 5;
-    else if (score >= 5000) targetLevel = 4;
-    else if (score >= 2500) targetLevel = 3;
-    else if (score >= 1000) targetLevel = 2;
+    if (score >= 4000 || wordsClearedCount >= 40) targetLevel = 6 + Math.floor((score - 4000) / 3000);
+    else if (score >= 2200 || wordsClearedCount >= 25) targetLevel = 5;
+    else if (score >= 1200 || wordsClearedCount >= 16) targetLevel = 4;
+    else if (score >= 500 || wordsClearedCount >= 9) targetLevel = 3;
+    else if (score >= 100 || wordsClearedCount >= 4) targetLevel = 2;
 
     if (targetLevel > level) {
         level = targetLevel;
         levelValEl.textContent = level;
-        // Visual indicator on level up
-        showPopupText(`LEVEL ${level}!`, "var(--neon-cyan)");
+        
+        // Triumphant Level Up effects!
+        audio.playLevelUp();
+        triggerScreenShake();
+        showWordClearPopup(`LEVEL ${level} UNLOCKED!`, { el: boardEl });
+
+        // Level Up Reward: Reset rise timer progress to give player a fresh breathing start
+        riseProgress = 0;
+        if (timerBarEl) timerBarEl.style.width = "0%";
     }
 }
 
