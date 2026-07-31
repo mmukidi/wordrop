@@ -6,6 +6,7 @@
     --neon-cyan: #00f0ff;
     --neon-purple: #bd00ff;
     --neon-gold: #ffb700;
+    --neon-pink: #ff2fb0;
     --text-light: #f3f4f6;
     --text-muted: #9ca3af;
     
@@ -425,6 +426,42 @@ body {
 }
 .tile-rare .tile-letter {
     color: #fef3c7;
+}
+
+/* Glow Tiles — normal tiles (fall/shuffle/swap like any other) that also
+   carry a burst threshold badge (see game.js GLOW_TILE_* constants).
+   Distinct fiery palette from rarity colors so they read immediately as
+   "different" from normal tiles. */
+.tile-glow .tile-inner {
+    background-color: rgba(249, 115, 22, 0.22);
+    border-color: #f97316;
+    box-shadow: 0 0 14px rgba(249, 115, 22, 0.55);
+    animation: glowPulse 1.4s infinite ease-in-out;
+}
+.tile-glow .tile-letter {
+    color: #ffedd5;
+}
+
+.tile-burst-badge {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: clamp(9px, 1.3vh, 12px);
+    color: #ffedd5;
+    font-weight: 800;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    pointer-events: none !important;
+}
+
+@keyframes glowPulse {
+    0%, 100% {
+        box-shadow: 0 0 12px rgba(249, 115, 22, 0.5), inset 0 0 6px rgba(255, 255, 255, 0.05);
+        border-color: #f97316;
+    }
+    50% {
+        box-shadow: 0 0 22px rgba(249, 115, 22, 0.9), inset 0 0 10px rgba(255, 255, 255, 0.25);
+        border-color: #fb923c;
+    }
 }
 
 /* Animations */
@@ -936,10 +973,11 @@ body {
 }
 
 @keyframes shakeBoard {
-    0%, 100% { transform: translate3d(0, 0, 0); }
-    15%, 85% { transform: translate3d(-3px, -1.5px, 0); }
-    30%, 70% { transform: translate3d(3px, 1.5px, 0); }
-    45%, 55% { transform: translate3d(-4px, 3px, 0); }
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    10% { transform: translate3d(0, 0, 0) scale(1.012); }
+    20%, 85% { transform: translate3d(-3px, -1.5px, 0) scale(1.006); }
+    35%, 70% { transform: translate3d(3px, 1.5px, 0) scale(1.006); }
+    50%, 55% { transform: translate3d(-4px, 3px, 0) scale(1.006); }
 }
 
 /* Swipe Canvas Overlay */
@@ -978,44 +1016,76 @@ body {
 .word-burst-ring {
     position: absolute;
     border-radius: 12px;
-    border: 3px solid var(--neon-cyan);
-    box-shadow: 0 0 25px var(--neon-cyan), inset 0 0 15px var(--neon-pink);
+    border: 4px solid var(--neon-cyan);
+    box-shadow: 0 0 32px var(--neon-cyan), inset 0 0 18px var(--neon-pink);
     pointer-events: none;
     z-index: 500;
-    animation: burstRingExpand 0.45s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
+    animation: burstRingExpand 0.5s cubic-bezier(0.1, 0.9, 0.2, 1) forwards;
 }
 
 @keyframes burstRingExpand {
     0% {
-        transform: scale(0.92);
+        transform: scale(0.88);
         opacity: 1;
-        filter: brightness(2);
+        filter: brightness(2.4);
     }
-    50% {
-        opacity: 0.85;
+    35% {
+        opacity: 0.9;
+        filter: brightness(1.6);
     }
     100% {
-        transform: scale(1.15);
+        transform: scale(1.4);
         opacity: 0;
         filter: brightness(0.5);
     }
 }
 
+/* Quick bright flash across the cleared word for a stronger sense of impact
+   — fires and fades in ~180ms, underneath the ring's slower expansion */
+.word-burst-flash {
+    position: absolute;
+    border-radius: 12px;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.35) 55%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+    z-index: 499;
+    animation: burstFlash 0.22s ease-out forwards;
+}
+
+@keyframes burstFlash {
+    0% { opacity: 1; transform: scale(0.9); }
+    100% { opacity: 0; transform: scale(1.25); }
+}
+
+/* Row/Column Glow Burst — same ring/flash mechanism as a normal word
+   clear, spanning the full row or column, in a distinct fiery palette so
+   it reads as a bigger, different event. */
+.word-burst-ring.glow {
+    border-color: #f97316;
+    box-shadow: 0 0 40px #f97316, inset 0 0 24px #fbbf24;
+}
+
+.word-burst-flash.glow {
+    background: radial-gradient(circle, rgba(255, 237, 213, 0.95) 0%, rgba(249, 115, 22, 0.45) 55%, rgba(249, 115, 22, 0) 100%);
+}
+
 .burst-particle {
     position: absolute;
-    width: 8px;
-    height: 8px;
+    width: var(--size, 8px);
+    height: var(--size, 8px);
     border-radius: 50%;
-    background: #00f0ff;
-    box-shadow: 0 0 10px #00f0ff, 0 0 20px #bd00ff;
+    background: var(--pcolor, #00f0ff);
+    box-shadow: 0 0 10px var(--pcolor, #00f0ff), 0 0 22px var(--pcolor, #bd00ff);
     pointer-events: none;
     z-index: 600;
-    animation: particleFly 0.5s ease-out forwards;
+    animation: particleFly 0.6s cubic-bezier(0.15, 0.7, 0.3, 1) forwards;
 }
 
 @keyframes particleFly {
     0% {
-        transform: translate(0, 0) scale(1.3);
+        transform: translate(0, 0) scale(1.4);
+        opacity: 1;
+    }
+    60% {
         opacity: 1;
     }
     100% {

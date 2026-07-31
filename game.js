@@ -35,6 +35,27 @@ const TILE_VALUES = {
     N:1, O:1, P:3, Q:9, R:1, S:1, T:1, U:1, V:4, W:4, X:8, Y:4, Z:9
 };
 
+// Game Center leaderboard/achievement IDs — must match what's configured
+// in App Store Connect exactly (see GAME_CENTER_SETUP.md).
+const GC_LEADERBOARD_HIGH_SCORE = "wordrop_high_score";
+const GC_ACH_FIRST_WORD = "wordrop_first_word";
+const GC_ACH_LEVEL_5 = "wordrop_level_5";
+const GC_ACH_LEVEL_10 = "wordrop_level_10";
+const GC_ACH_CENTURY = "wordrop_century";
+const GC_ACH_WORDSMITH = "wordrop_wordsmith";
+
+// Glow Tiles — normal tiles (fall/shuffle/swap exactly like any other
+// tile) that additionally carry a threshold number badge. Any single word
+// cleared anywhere in that tile's row or column, scoring at least its
+// threshold, detonates the *entire* row or column (the glow tile
+// included) for a big bonus. This is deliberately the first of several
+// "one new toy per level" mechanics — see BACKLOG.md — rather than only
+// ramping difficulty via drop speed. Available from level 1 onward.
+const GLOW_TILE_UNLOCK_LEVEL = 1;
+const GLOW_TILE_SPAWN_CHANCE = 0.12; // per new bottom-row tile spawned
+const MAX_GLOW_TILES_ON_BOARD = 3;   // cap so the board never gets clogged
+const GLOW_TILE_BURST_BONUS = 25;    // flat bonus on top of tile values cleared
+
 // State Variables
 let grid = Array(GRID_ROWS).fill(null).map(() => Array(GRID_COLS).fill(null));
 let score = 0;
@@ -67,12 +88,31 @@ function forceUnlockBoard() {
     isSwipingPath = false;
     swipePath = [];
     if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     // Clear stuck CSS classes across all tiles
     if (boardEl) {
         boardEl.querySelectorAll(".tile.swapping, .tile.selected, .tile.dragging").forEach(el => {
             el.classList.remove("swapping", "selected", "dragging");
         });
+    }
+
+    // This function fires whenever normal flow gets interrupted mid-animation
+    // (an error, or the 2s watchdog above) — at exactly the moment a word
+    // clear/rise/swap may have left the grid mid-fall. Without this, tiles
+    // can be left visually "floating" with empty rows beneath them until an
+    // unrelated later event happens to trigger gravity again. Reconcile the
+    // grid and resync every tile's DOM position now so that never lingers.
+    applyGravity();
+    if (typeof grid !== "undefined") {
+        for (let y = 0; y < GRID_ROWS; y++) {
+            for (let x = 0; x < GRID_COLS; x++) {
+                const tile = grid[y][x];
+                if (tile && tile.el) {
+                    tile.el.style.setProperty("--row", tile.y);
+                    tile.el.style.setProperty("--col", tile.x);
+                }
+            }
+        }
     }
 }
 
@@ -171,6 +211,76 @@ let gamerTagInput;
 let gamerTag = localStorage.getItem("wordrop_gamer_tag") || ("WordRunner_" + Math.floor(1000 + Math.random() * 9000));
 localStorage.setItem("wordrop_gamer_tag", gamerTag);
 
+/* --- Game Center Integration ---
+ * Every function here is deliberately fire-and-forget and fails silently:
+ * Game Center is a bonus feature layered on top of the game, never a
+ * dependency of it. On the website (no Capacitor) or if a player declines
+ * Game Center sign-in, every gc* call below is a safe no-op so gameplay is
+ * never blocked or slowed down by it.
+ */
+
+function gcPlugin() {
+    return (
+        window.Capacitor &&
+        typeof window.Capacitor.isNativePlatform === "function" &&
+        window.Capacitor.isNativePlatform() &&
+        window.Capacitor.Plugins &&
+        window.Capacitor.Plugins.GameCenter
+    ) || null;
+}
+
+function gcAuthenticate() {
+    const gc = gcPlugin();
+    if (!gc) return;
+    gc.authenticate().catch(err => console.warn("[GameCenter] authenticate failed:", err));
+}
+
+function gcSubmitScore(value) {
+    const gc = gcPlugin();
+    if (!gc || !value) return;
+    gc.submitScore({ leaderboardID: GC_LEADERBOARD_HIGH_SCORE, score: value })
+        .catch(err => console.warn("[GameCenter] submitScore failed:", err));
+}
+
+function gcUnlockAchievement(achievementID) {
+    const gc = gcPlugin();
+    if (!gc) return;
+    gc.unlockAchievement({ achievementID })
+        .catch(err => console.warn("[GameCenter] unlockAchievement failed:", err));
+}
+
+function gcUpdateAchievementProgress(achievementID, percentComplete) {
+    const gc = gcPlugin();
+    if (!gc) return;
+    const clamped = Math.max(0, Math.min(100, percentComplete));
+    gc.updateAchievementProgress({ achievementID, percentComplete: clamped })
+        .catch(err => console.warn("[GameCenter] updateAchievementProgress failed:", err));
+}
+
+// One-time-per-device achievement unlocks. GameKit itself is idempotent
+// (re-unlocking an already-unlocked achievement is a harmless no-op), but
+// gating locally avoids firing a native call on every single word/level.
+function gcUnlockOnce(localStorageKey, achievementID) {
+    if (localStorage.getItem(localStorageKey)) return;
+    localStorage.setItem(localStorageKey, "1");
+    gcUnlockAchievement(achievementID);
+}
+
+// Called every time a word is cleared, regardless of game mode/level, to
+// drive the lifetime (cross-session) achievements. wordsClearedCount below
+// resets every run, so lifetime totals need their own persisted counter.
+function gcRecordWordCleared(word) {
+    const lifetimeWords = (parseInt(localStorage.getItem("wordrop_lifetime_words_cleared")) || 0) + 1;
+    localStorage.setItem("wordrop_lifetime_words_cleared", lifetimeWords);
+    gcUpdateAchievementProgress(GC_ACH_CENTURY, (lifetimeWords / 100) * 100);
+
+    gcUnlockOnce("wordrop_ach_first_word_done", GC_ACH_FIRST_WORD);
+
+    if (word && word.length >= 7) {
+        gcUnlockOnce("wordrop_ach_wordsmith_done", GC_ACH_WORDSMITH);
+    }
+}
+
 /* --- Initialization --- */
 
 async function initGame() {
@@ -215,6 +325,10 @@ async function initGame() {
 
     // Attach Event Listeners
     setupEventListeners();
+
+    // Sign into Game Center in the background — never blocks game start,
+    // and is a total no-op on the website build (see gcPlugin()).
+    gcAuthenticate();
 
     // Start Game
     startGame();
@@ -414,6 +528,7 @@ function startGame() {
     score = 0;
     level = 1;
     wordsClearedCount = 0;
+    longestWordSpelled = "—";
     isPlaying = true;
     isPaused = false;
     forceUnlockBoard();
@@ -478,13 +593,13 @@ function startGame() {
     startRiseTimer();
 }
 
-function spawnTile(x, y, forcedLetter = null) {
+function spawnTile(x, y, forcedLetter = null, isGlow = false, burstValue = null) {
     const parentContainer = getTileMatrixContainer();
     if (!parentContainer) return;
 
     const letter = forcedLetter || getRandomLetter();
     const value = TILE_VALUES[letter];
-    
+
     // Determine rarity class
     let rarityClass = "tile-common";
     if (value >= 5) rarityClass = "tile-rare";
@@ -492,16 +607,21 @@ function spawnTile(x, y, forcedLetter = null) {
 
     // Create element
     const tileEl = document.createElement("div");
-    tileEl.className = `tile ${rarityClass}`;
+    tileEl.className = `tile ${rarityClass}${isGlow ? " tile-glow" : ""}`;
     tileEl.style.setProperty("--col", x);
     tileEl.style.setProperty("--row", y);
-    
+
     const id = tileIdCounter++;
     tileEl.dataset.id = id;
 
-    // Create interior layout
+    // Create interior layout. Glow tiles get an extra badge showing their
+    // burst threshold, opposite corner from the normal per-letter value.
+    // Otherwise a glow tile is a completely normal tile — it falls,
+    // shuffles, and swaps exactly like any other (see GLOW_TILE_UNLOCK_LEVEL
+    // comment above for why it's deliberately NOT immovable).
     tileEl.innerHTML = `
         <div class="tile-inner">
+            ${isGlow ? `<span class="tile-burst-badge">⚡${burstValue}</span>` : ""}
             <span class="tile-letter">${letter}</span>
             <span class="tile-value">${value}</span>
         </div>
@@ -516,8 +636,35 @@ function spawnTile(x, y, forcedLetter = null) {
         value: value,
         x: x,
         y: y,
-        el: tileEl
+        el: tileEl,
+        glow: isGlow,
+        burstValue: isGlow ? burstValue : null
     };
+}
+
+// Whether the next spawned tile in a rising row should be a glow tile —
+// gated by level unlock, a flat per-tile chance, and a board-wide cap so
+// glow tiles stay a spotlight moment rather than clutter.
+function shouldSpawnGlowTile() {
+    if (level < GLOW_TILE_UNLOCK_LEVEL) return false;
+    if (countGlowTilesOnBoard() >= MAX_GLOW_TILES_ON_BOARD) return false;
+    return Math.random() < GLOW_TILE_SPAWN_CHANCE;
+}
+
+function countGlowTilesOnBoard() {
+    let count = 0;
+    for (let y = 0; y < GRID_ROWS; y++) {
+        for (let x = 0; x < GRID_COLS; x++) {
+            if (grid[y][x] && grid[y][x].glow) count++;
+        }
+    }
+    return count;
+}
+
+// Threshold scales gently with level so later levels ask a bit more of a
+// single word to trigger a burst. A first-pass tuning value, easy to adjust.
+function rollGlowThreshold() {
+    return 5 + Math.floor(Math.random() * 6) + Math.floor(level / 3);
 }
 
 function getRandomLetter() {
@@ -658,6 +805,11 @@ function handleMouseUp(e) {
 // ========================================================================
 
 function swipeBegin(clientX, clientY) {
+    // Cheap safety net: if any tile was left floating by an interrupted
+    // animation (see forceUnlockBoard), settle it before resolving what the
+    // player is touching. A no-op when the board is already stable.
+    applyGravity();
+
     // Clear previous path
     boardEl.querySelectorAll(".tile.selected").forEach(el => el.classList.remove("selected"));
     swipePath = [];
@@ -725,13 +877,26 @@ function swipeFinish() {
     if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     if (path.length === 2) {
-        // 2-tile swipe → swap positions
+        // 2-tile swipe → swap positions. Glow tiles swap like any other
+        // tile — they're only special for their burst badge/trigger, not
+        // for movement.
         executeSwap(path[0], path[1].x, path[1].y);
     } else if (path.length >= 3) {
         // 3+ tile swipe → validate word
         const word = path.map(t => t.letter).join("").toLowerCase();
         if (validator.isValidWord(word)) {
-            sliceClearWord({ word, tiles: path });
+            // Real bug fix (2026-07-31): this object was missing `direction`,
+            // which calculateWordScore()'s 1.5x vertical bonus and
+            // findGlowTileInLine()/triggerRowColumnBurst() both depend on.
+            // Every real player swipe silently fell through to `undefined`,
+            // which findGlowTileInLine treated as "vertical" regardless of
+            // the actual swipe axis — the root cause of glow-tile bursts
+            // seeming to randomly not fire on the row/column the player
+            // actually cleared. The path is already locked to one axis by
+            // swipeContinue()'s straight-line lock above, so this is safe to
+            // derive from the first two tiles.
+            const direction = path.length < 2 || path[0].y === path[1].y ? "horizontal" : "vertical";
+            sliceClearWord({ word, tiles: path, direction });
         } else {
             drawErrorPath(path);
             audio.playClick();
@@ -958,9 +1123,73 @@ function triggerHint() {
     }, 3500);
 }
 
+// Looks for a live glow tile anywhere along the swiped word's row
+// (horizontal words) or column (vertical words) — must be captured before
+// the word's own tiles are cleared below, since the word itself may pass
+// directly through the glow tile.
+function findGlowTileInLine(match) {
+    if (!match.tiles || match.tiles.length === 0) return null;
+    const first = match.tiles[0];
+    if (match.direction === "horizontal") {
+        const y = first.y;
+        for (let x = 0; x < GRID_COLS; x++) {
+            const t = grid[y][x];
+            if (t && t.glow) return t;
+        }
+    } else {
+        const x = first.x;
+        for (let y = 0; y < GRID_ROWS; y++) {
+            const t = grid[y][x];
+            if (t && t.glow) return t;
+        }
+    }
+    return null;
+}
+
+// Detonates every tile currently in the glow tile's row or column
+// (including the glow tile itself, and including cells already emptied
+// by the word that triggered it — those are just skipped as null).
+function triggerRowColumnBurst(glowTile, direction) {
+    const isHorizontal = direction === "horizontal";
+    const line = [];
+    if (isHorizontal) {
+        for (let x = 0; x < GRID_COLS; x++) {
+            const t = grid[glowTile.y][x];
+            if (t) line.push(t);
+        }
+    } else {
+        for (let y = 0; y < GRID_ROWS; y++) {
+            const t = grid[y][glowTile.x];
+            if (t) line.push(t);
+        }
+    }
+    if (line.length === 0) return;
+
+    spawnWordBurstRing(line, "glow");
+
+    let bonus = 0;
+    line.forEach(tile => {
+        bonus += tile.value;
+        spawnTileSparks(tile);
+        if (tile.el) tile.el.remove();
+        grid[tile.y][tile.x] = null;
+    });
+
+    const totalBonus = bonus + GLOW_TILE_BURST_BONUS;
+    updateScore(totalBonus);
+    triggerScreenShake();
+    showWordClearPopup(`⚡ ${isHorizontal ? "ROW" : "COLUMN"} GLOW! +${totalBonus}`, { el: boardEl });
+    audio.playSlash();
+    audio.playBurstPop();
+}
+
 async function sliceClearWord(match) {
     setBoardLock(true);
-    
+
+    // Snapshot before this word's own tiles are removed below — the glow
+    // tile being searched for may be one of the tiles in `match` itself.
+    const glowTile = findGlowTileInLine(match);
+
     // Play sounds: blade slash whoosh + acoustic burst pop + chime
     audio.playSlash();
     audio.playBurstPop();
@@ -1016,6 +1245,20 @@ async function sliceClearWord(match) {
     updateScore(scoreResult.score);
     wordsClearedCount++;
 
+    // Glow tile payoff: this single word's score met the threshold of a
+    // glow tile living anywhere in its row/column — blow the whole line.
+    if (glowTile && scoreResult.score >= glowTile.burstValue) {
+        triggerRowColumnBurst(glowTile, match.direction);
+    }
+
+    // Track longest word spelled this run (previously declared but never
+    // actually updated, so the stats card always showed "—").
+    if (longestWordSpelled === "—" || scoreResult.word.length > longestWordSpelled.length) {
+        longestWordSpelled = scoreResult.word;
+    }
+
+    gcRecordWordCleared(scoreResult.word);
+
     // Update Last Spelled Word HUD
     lastWordTextEl.textContent = scoreResult.word.toUpperCase();
     lastWordScoreEl.textContent = `(+${scoreResult.score} PTS)`;
@@ -1040,7 +1283,7 @@ async function sliceClearWord(match) {
     }, 350);
 }
 
-function spawnWordBurstRing(tiles) {
+function spawnWordBurstRing(tiles, variant = "") {
     if (!tiles || tiles.length === 0) return;
 
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
@@ -1051,9 +1294,11 @@ function spawnWordBurstRing(tiles) {
         if (t.y > maxY) maxY = t.y;
     });
 
+    const variantClass = variant ? ` ${variant}` : "";
+
     const ring = document.createElement("div");
-    ring.className = "word-burst-ring";
-    
+    ring.className = `word-burst-ring${variantClass}`;
+
     const leftPct = (minX / GRID_COLS) * 100;
     const bottomPct = (minY / GRID_ROWS) * 100;
     const widthPct = ((maxX - minX + 1) / GRID_COLS) * 100;
@@ -1065,8 +1310,28 @@ function spawnWordBurstRing(tiles) {
     ring.style.height = `calc(${heightPct}% + 8px)`;
 
     boardEl.appendChild(ring);
+    setTimeout(() => ring.remove(), 500);
 
-    setTimeout(() => ring.remove(), 450);
+    // Fast bright flash underneath the ring's slower expansion — reads as
+    // an immediate "impact" the instant the word clears, rather than only
+    // the outline sweeping outward a moment later.
+    const flash = document.createElement("div");
+    flash.className = `word-burst-flash${variantClass}`;
+    flash.style.left = ring.style.left;
+    flash.style.bottom = ring.style.bottom;
+    flash.style.width = ring.style.width;
+    flash.style.height = ring.style.height;
+
+    boardEl.appendChild(flash);
+    setTimeout(() => flash.remove(), 250);
+}
+
+// Rarity-matched particle color so the burst visually ties back to what was
+// actually cleared (a rare gold tile bursts gold, not a generic cyan).
+function getRarityColor(value) {
+    if (value >= 5) return "#f59e0b"; // rare
+    if (value >= 2) return "#a855f7"; // uncommon
+    return "#3b82f6"; // common
 }
 
 function spawnTileSparks(tile) {
@@ -1074,15 +1339,21 @@ function spawnTileSparks(tile) {
     const rect = tile.el.getBoundingClientRect();
     const cx = rect.left - parentRect.left + rect.width / 2;
     const cy = rect.top - parentRect.top + rect.height / 2;
+    // Glow-tile bursts get a distinct fiery color so a row/column
+    // detonation always reads visually different from a normal word clear.
+    const color = tile.glow ? "#f97316" : getRarityColor(tile.value);
 
-    for (let i = 0; i < 4; i++) {
+    const PARTICLE_COUNT = 8;
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
         const p = document.createElement("div");
         p.className = "burst-particle";
         p.style.left = `${cx}px`;
         p.style.top = `${cy}px`;
+        p.style.setProperty("--pcolor", color);
+        p.style.setProperty("--size", `${6 + Math.random() * 6}px`);
 
-        const angle = (Math.PI * 2 * i) / 4 + (Math.random() * 0.4 - 0.2);
-        const dist = 25 + Math.random() * 25;
+        const angle = (Math.PI * 2 * i) / PARTICLE_COUNT + (Math.random() * 0.35 - 0.175);
+        const dist = 28 + Math.random() * 30;
         const dx = Math.cos(angle) * dist;
         const dy = Math.sin(angle) * dist;
 
@@ -1090,7 +1361,7 @@ function spawnTileSparks(tile) {
         p.style.setProperty("--dy", `${dy}px`);
 
         boardEl.appendChild(p);
-        setTimeout(() => p.remove(), 500);
+        setTimeout(() => p.remove(), 600);
     }
 }
 
@@ -1131,6 +1402,8 @@ function applyGravity() {
         keepChecking = false;
         for (let x = 0; x < GRID_COLS; x++) {
             for (let y = 0; y < GRID_ROWS - 1; y++) {
+                // Glow tiles fall exactly like any other tile — they're
+                // only special for their burst badge/trigger, not movement.
                 if (grid[y][x] === null && grid[y + 1][x] !== null) {
                     const tile = grid[y + 1][x];
                     grid[y][x] = tile;
@@ -1273,9 +1546,14 @@ async function pushGridUp() {
             }
         }
 
-        // 3. Spawn new row at bottom (Row 0)
+        // 3. Spawn new row at bottom (Row 0) — occasionally a glow tile
+        // once the player has reached the unlock level.
         for (let x = 0; x < GRID_COLS; x++) {
-            spawnTile(x, 0);
+            if (shouldSpawnGlowTile()) {
+                spawnTile(x, 0, null, true, rollGlowThreshold());
+            } else {
+                spawnTile(x, 0);
+            }
         }
 
         // Wait for shifts (150ms)
@@ -1320,8 +1598,9 @@ async function triggerShuffle() {
     setBoardLock(true);
     try {
         audio.playClick();
-        
-        // Gather all active tiles on the board
+
+        // Gather all active tiles on the board — glow tiles shuffle
+        // along with everything else, same as any other tile.
         const tilesList = [];
         for (let y = 0; y < GRID_ROWS; y++) {
             for (let x = 0; x < GRID_COLS; x++) {
@@ -1419,7 +1698,7 @@ function checkLevelProgression() {
     if (targetLevel > level) {
         level = targetLevel;
         levelValEl.textContent = level;
-        
+
         // Triumphant Level Up effects!
         audio.playLevelUp();
         triggerScreenShake();
@@ -1428,6 +1707,9 @@ function checkLevelProgression() {
         // Level Up Reward: Reset rise timer progress to give player a fresh breathing start
         riseProgress = 0;
         if (timerBarEl) timerBarEl.style.width = "0%";
+
+        if (level >= 5) gcUnlockOnce("wordrop_ach_level5_done", GC_ACH_LEVEL_5);
+        if (level >= 10) gcUnlockOnce("wordrop_ach_level10_done", GC_ACH_LEVEL_10);
     }
 }
 
@@ -1499,8 +1781,24 @@ function showWordClearPopup(wordText, anchorTile) {
         wordPopup.classList.add("hidden");
     }, 800);
 
-    // 2. Floating score popup over cleared tiles
-    if (anchorTile) {
+    // 2. Floating score popup over cleared tiles. Only real tile anchors
+    // (which carry a .letter) get the floating "+N" number — generic
+    // status messages pass a placeholder like `{ el: boardEl }` purely to
+    // anchor the position, and have no per-tile score to show. Previously
+    // this branch ran unconditionally for BOTH cases: calculateWordScore()
+    // would receive `word: undefined` from the placeholder and throw
+    // (`undefined.length`), which — since showWordClearPopup is called
+    // synchronously from checkLevelProgression()/triggerHint()/
+    // triggerVortex() with no surrounding try/catch — unwound uncaught all
+    // the way up through updateScore() and back into whatever caller
+    // triggered it. In sliceClearWord() specifically, that meant leveling
+    // up on the exact word that leveled you up skipped every line after
+    // updateScore() in that call — including the setTimeout that runs
+    // applyGravity()/resolveBoardCascades() — leaving the board stuck
+    // locked until the 2s watchdog force-unlocked it. Found via a real
+    // browser DOM test (jsdom) exercising the actual level-up/hint/vortex/
+    // glow-burst popup calls end-to-end, not just mocked function tests.
+    if (anchorTile && anchorTile.letter) {
         const rect = anchorTile.el.getBoundingClientRect();
         const parentRect = boardEl.getBoundingClientRect();
         const popX = rect.left - parentRect.left + (rect.width / 2);
@@ -1604,6 +1902,8 @@ function triggerGameOver() {
     finalScoreEl.textContent = score.toLocaleString();
     finalLevelEl.textContent = level;
     finalWordsCountEl.textContent = wordsClearedCount;
+
+    gcSubmitScore(score);
 
     gameOverOverlay.classList.remove("hidden");
 }
