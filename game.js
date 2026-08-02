@@ -543,55 +543,41 @@ const LEVEL_0_CHEER_MS = 1200;
 
 // Each step: what to say, how to stage the board, and which player action
 // completes it. `gate` receives the event name emitted by the real game
-// functions (see level0Notify call sites) and returns true to advance.
+// functions plus a payload (see level0Notify call sites) and returns true
+// to advance. Kept deliberately tiny -- three directions of tile movement,
+// then one word -- so a first-timer is never holding more than one idea.
 const LEVEL_0_STEPS = [
     {
-        key: "swipe",
-        title: "STEP 1 OF 6 · SWIPE TO SPELL",
-        hint: "Drag your finger across the 3 glowing tiles: C → A → T",
-        cheer: "✓ That's a word! Tiles cleared.",
-        stage: () => level0PlaceWord(0, 0, "CAT", true),
-        gate: (evt) => evt === "wordCleared"
+        key: "swapLeft",
+        title: "STEP 1 OF 4 · MOVE A TILE LEFT",
+        hint: "Drag a tile onto its LEFT neighbour to swap the two. Try the glowing pair.",
+        cheer: "✓ Nice — that's how you move tiles.",
+        stage: () => level0SpotlightSwapPair(-1, 0),
+        gate: (evt, p) => evt === "swap" && p && p.dx === -1
     },
     {
-        key: "swap",
-        title: "STEP 2 OF 6 · SWAP TWO TILES",
-        hint: "Drag across only 2 tiles to swap them. Swap the glowing pair to make T-O-P.",
-        cheer: "✓ Nice swap! Two tiles = swap, three or more = word.",
-        stage: () => level0PlaceWord(0, 0, "OTP", true, 2),
-        gate: () => level0ReadRow(0, 0, 3) === "TOP"
+        key: "swapRight",
+        title: "STEP 2 OF 4 · NOW MOVE ONE RIGHT",
+        hint: "Same move, other way: drag a tile onto its RIGHT neighbour.",
+        cheer: "✓ Got it. Left and right, sorted.",
+        stage: () => level0SpotlightSwapPair(1, 0),
+        gate: (evt, p) => evt === "swap" && p && p.dx === 1
+    },
+    {
+        key: "swapDown",
+        title: "STEP 3 OF 4 · NOW MOVE ONE DOWN",
+        hint: "Tiles move up and down too. Drag a tile DOWN onto the one below it.",
+        cheer: "✓ Any direction you like. Last one!",
+        stage: () => level0SpotlightSwapPair(0, -1),
+        gate: (evt, p) => evt === "swap" && p && p.dy === -1
     },
     {
         key: "spell",
-        title: "STEP 3 OF 6 · NOW CLEAR IT",
-        hint: "You built T-O-P. Swipe across it to clear it and score.",
-        cheer: "✓ Swap, then spell. That's the whole game.",
-        stage: () => level0SpotlightRow(0, 0, 3),
+        title: "STEP 4 OF 4 · SPELL A WORD",
+        hint: "Now the real thing: drag across 3 or more letters in a line to spell a word. The glowing tiles spell C-A-T.",
+        cheer: "🎉 That's a word! You're ready.",
+        stage: () => level0PlaceWord(0, 0, "CAT", true),
         gate: (evt) => evt === "wordCleared"
-    },
-    {
-        key: "shuffle",
-        title: "STEP 4 OF 6 · SHUFFLE WHEN STUCK",
-        hint: "No words left? Tap the glowing 🌀 SHUFFLE button to remix the whole board.",
-        cheer: "✓ Board remixed. Use this any time you're stuck.",
-        stage: () => level0SpotlightShuffle(true),
-        gate: (evt) => evt === "shuffle"
-    },
-    {
-        key: "glow",
-        title: "STEP 5 OF 6 · GLOW TILE POWER",
-        hint: "The orange ⚡ tile blows up its ENTIRE row. Clear D-O-G in its row to set it off!",
-        cheer: "💥 BOOM! Whole row cleared for bonus points.",
-        stage: () => level0StageGlowStep(),
-        gate: (evt) => evt === "glowBurst"
-    },
-    {
-        key: "rise",
-        title: "STEP 6 OF 6 · SURVIVE THE RISE",
-        hint: "Now the board rises. Keep clearing words so tiles never reach the top. You're ready — good luck!",
-        cheer: "🎓 Tutorial complete. Go get a high score!",
-        stage: () => level0StartFreePlay(),
-        gate: () => false // ends via the countdown inside level0StartFreePlay
     }
 ];
 
@@ -627,8 +613,14 @@ function showLevel0Hint() {
     if (!hintEl || !step) return;
     const titleEl = hintEl.querySelector(".hint-title");
     const textEl = hintEl.querySelector(".hint-text");
+    const dotsEl = hintEl.querySelector(".hint-progress");
     if (titleEl) titleEl.textContent = step.title;
     if (textEl) textEl.textContent = step.hint;
+    if (dotsEl) {
+        dotsEl.textContent = LEVEL_0_STEPS
+            .map((_, i) => (i < level0Step ? "●" : i === level0Step ? "◉" : "○"))
+            .join("");
+    }
     hintEl.classList.remove("hidden", "cheering");
 }
 
@@ -643,8 +635,15 @@ function showLevel0Cheer(text) {
     if (!hintEl) return;
     const titleEl = hintEl.querySelector(".hint-title");
     const textEl = hintEl.querySelector(".hint-text");
+    const dotsEl = hintEl.querySelector(".hint-progress");
     if (titleEl) titleEl.textContent = text;
     if (textEl) textEl.textContent = "";
+    if (dotsEl) {
+        // The step just cleared counts as done in the tracker.
+        dotsEl.textContent = LEVEL_0_STEPS
+            .map((_, i) => (i <= level0Step ? "●" : "○"))
+            .join("");
+    }
     hintEl.classList.remove("hidden");
     hintEl.classList.add("cheering");
 }
@@ -652,39 +651,59 @@ function showLevel0Cheer(text) {
 // Single entry point the rest of the game calls after a real player action.
 // Only the CURRENT step's gate can advance the tutorial, so actions done
 // out of order are simply ignored rather than skipping ahead.
-function level0Notify(evt) {
+function level0Notify(evt, payload) {
     if (!isLevel0 || level0Locked) return;
     const step = level0CurrentStep();
     if (!step || typeof step.gate !== "function") return;
-    if (!step.gate(evt)) return;
+    if (!step.gate(evt, payload)) return;
 
     level0Locked = true;
     level0ClearSpotlights();
     level0SpotlightShuffle(false);
     showLevel0Cheer(step.cheer);
     hapticNotification("Success");
+    audio.playLevelUp();
 
     setTimeout(() => {
         level0Step++;
         level0Locked = false;
         if (level0Step >= LEVEL_0_STEPS.length) {
-            level0Finish();
+            level0Celebrate();
         } else {
             level0EnterStep();
         }
     }, LEVEL_0_CHEER_MS);
 }
 
-// Last step: hand the board over to the player and let the rise begin.
-function level0StartFreePlay() {
-    level0UnlockAllControls();
-    setTimeout(() => {
-        if (!isLevel0) return;
-        level0Finish();
-    }, 5000);
+// All four steps cleared: throw the player a proper "you passed" moment
+// before handing them a real Level 1 board.
+function level0Celebrate() {
+    level0Finish({ keepPaused: true });
+    hapticNotification("Success");
+    audio.playLevelUp();
+    const overlay = document.getElementById("level0-complete-overlay");
+    if (overlay) {
+        overlay.classList.remove("hidden");
+    } else {
+        // No overlay in the DOM (older shell) -- just start playing.
+        selectLevel(1);
+    }
 }
 
-function level0Finish() {
+// Dismiss the celebration and drop the player into a fresh Level 1.
+function level0StartLevel1() {
+    const overlay = document.getElementById("level0-complete-overlay");
+    if (overlay) overlay.classList.add("hidden");
+    isDailyMode = false;
+    level = 1;
+    startGame();
+    if (levelValEl) levelValEl.textContent = level;
+    showWordClearPopup("GOOD LUCK!", { el: boardEl });
+}
+
+// Tear down all guided state. `keepPaused` leaves the rise stopped, used
+// when the celebration overlay is about to take over the screen.
+function level0Finish({ keepPaused = false } = {}) {
     if (!isLevel0) return;
     localStorage.setItem("wordrop_level0_done", "1");
     isLevel0 = false;
@@ -694,7 +713,7 @@ function level0Finish() {
     level0UnlockAllControls();
     hideLevel0Hint();
     if (levelValEl) levelValEl.textContent = level;
-    if (!riseTimerInterval) startRiseTimer();
+    if (!keepPaused && !riseTimerInterval) startRiseTimer();
 }
 
 /* --- Level 0 board staging helpers --- */
@@ -720,56 +739,36 @@ function level0SetLetter(x, y, letter) {
     return existing;
 }
 
-// Write `word` starting at (x, y) going right, optionally spotlighting the
-// first `spotlightCount` tiles (defaults to the whole word).
-function level0PlaceWord(x, y, word, spotlight = false, spotlightCount = null) {
+// Write `word` starting at (x, y) going right, optionally spotlighting it.
+function level0PlaceWord(x, y, word, spotlight = false) {
     const placed = [];
     word.split("").forEach((ch, i) => {
         const tile = level0SetLetter(x + i, y, ch);
         if (tile) placed.push(tile);
     });
-    if (spotlight) {
-        const count = spotlightCount == null ? placed.length : spotlightCount;
-        level0Spotlight(placed.slice(0, count));
-    }
+    if (spotlight) level0Spotlight(placed);
     return placed;
 }
 
-function level0SpotlightRow(x, y, len) {
-    const tiles = [];
-    for (let i = 0; i < len; i++) {
-        const t = grid[y] && grid[y][x + i];
-        if (t) tiles.push(t);
+// Spotlight a real, currently-valid pair of adjacent tiles the player can
+// drag in direction (dx, dy) -- e.g. (-1, 0) for "move a tile left". Only a
+// suggestion: the gate accepts ANY swap in the right direction, so the
+// player can practise wherever they like on the board.
+function level0SpotlightSwapPair(dx, dy) {
+    for (let y = 0; y < GRID_ROWS; y++) {
+        for (let x = 0; x < GRID_COLS; x++) {
+            const tx = x + dx;
+            const ty = y + dy;
+            if (tx < 0 || tx >= GRID_COLS || ty < 0 || ty >= GRID_ROWS) continue;
+            const from = grid[y][x];
+            const to = grid[ty][tx];
+            if (from && to) {
+                level0Spotlight([from, to]);
+                return;
+            }
+        }
     }
-    level0Spotlight(tiles);
-}
-
-// Read the letters currently sitting at (x..x+len-1, y) as a string.
-function level0ReadRow(x, y, len) {
-    let out = "";
-    for (let i = 0; i < len; i++) {
-        const t = grid[y] && grid[y][x + i];
-        if (!t) return "";
-        out += t.letter;
-    }
-    return out.toUpperCase();
-}
-
-// Stage the glow lesson: a ⚡ tile at the far end of row 0 plus the word
-// D-O-G in that same row, so clearing it detonates the whole row.
-function level0StageGlowStep() {
-    const y = 0;
-    const glowX = 6;
-    const existing = grid[y] && grid[y][glowX];
-    if (existing) {
-        existing.el.remove();
-        grid[y][glowX] = null;
-    }
-    // Threshold 3: D-O-G scores 5, so the burst is guaranteed to fire.
-    spawnTile(glowX, y, "E", true, 3);
-    level0PlaceWord(0, y, "DOG", true);
-    const glowTile = grid[y][glowX];
-    if (glowTile && glowTile.el) glowTile.el.classList.add("level0-target");
+    level0ClearSpotlights();
 }
 
 /* --- Level 0 spotlight + control gating --- */
@@ -1001,6 +1000,11 @@ function setupEventListeners() {
         audio.playClick();
         closeLevelSelectModal();
         startLevel0();
+    });
+    const btnLevel0Start = document.getElementById("btn-level0-start");
+    if (btnLevel0Start) btnLevel0Start.addEventListener("click", () => {
+        audio.playClick();
+        level0StartLevel1();
     });
 
     btnShuffle.addEventListener("click", triggerShuffle);
@@ -1575,6 +1579,11 @@ function getTileById(id) {
 
 async function executeSwap(tileA, targetCol, targetRow) {
     setBoardLock(true);
+    // Direction of the drag, captured before the coordinates are mutated
+    // below. Level 0 teaches left/right/down using this. Note y=0 is the
+    // FLOOR, so dy = -1 means the player dragged downward on screen.
+    const swapDx = targetCol - tileA.x;
+    const swapDy = targetRow - tileA.y;
     try {
         const tileB = grid[targetRow][targetCol];
         audio.playSwap();
@@ -1611,9 +1620,9 @@ async function executeSwap(tileA, targetCol, targetRow) {
         // 3. Scan and cascade matches
         await resolveBoardCascades();
 
-        // Level 0: a real 2-tile swap is the gate for the swap step. Checked
-        // after cascades so the gate reads the settled board.
-        level0Notify("swap");
+        // Level 0: a real 2-tile swap is the gate for the movement steps.
+        // Checked after cascades so the gate reads the settled board.
+        level0Notify("swap", { dx: swapDx, dy: swapDy });
     } catch (err) {
         console.error("Error during executeSwap:", err);
         forceUnlockBoard();
@@ -1814,7 +1823,8 @@ function triggerRowColumnBurst(glowTile, direction) {
     audio.playBurstPop();
     hapticImpact("Heavy"); // the big payoff moment deserves the big thump
 
-    // Level 0: firing a real row/column burst is the gate for the glow step.
+    // Level 0 hears about every meaningful player action, even ones no
+    // current step gates on, so steps can be re-ordered without rewiring.
     level0Notify("glowBurst");
 }
 
@@ -2321,7 +2331,7 @@ async function triggerShuffle() {
         // Check for words created by shuffle
         await resolveBoardCascades();
 
-        // Level 0: pressing the real SHUFFLE button is the gate for step 4.
+        // See the note on the glowBurst notify: reported for completeness.
         level0Notify("shuffle");
     } catch (err) {
         console.error("Error during triggerShuffle:", err);

@@ -1341,13 +1341,18 @@ body {
    the current step is teaching get a pulsing spotlight.
    ========================================================================== */
 
+/* Docked to the TOP of the board container (which is position:relative).
+   Tiles stack upward from the floor, so the top of the board is the one
+   area guaranteed to be empty during the tutorial — the hint can never
+   sit on top of the tiles the player is being asked to touch. */
 .level0-hint {
-    position: fixed;
+    position: absolute;
+    top: 10px;
     left: 50%;
-    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     transform: translateX(-50%);
-    width: min(92%, 460px);
-    z-index: 999;
+    width: calc(100% - 24px);
+    max-width: 420px;
+    z-index: 60;
     pointer-events: none; /* never blocks a swipe aimed at the board */
     animation: level0HintIn 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
@@ -1381,6 +1386,15 @@ body {
     color: var(--text-light);
     line-height: 1.45;
     margin: 0;
+}
+
+/* Dot tracker: ● done, ◉ current, ○ still to come. */
+.hint-progress {
+    margin-top: 7px;
+    font-size: 12px;
+    letter-spacing: 7px;
+    color: var(--neon-cyan);
+    opacity: 0.85;
 }
 
 /* Success state between steps — box flips green and congratulates. */
@@ -1448,4 +1462,62 @@ body {
     border-color: var(--neon-cyan) !important;
     box-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
     margin-bottom: 12px;
+}
+
+/* ---- Level 0 completion celebration ---- */
+.level0-complete-content {
+    border-color: var(--neon-gold) !important;
+    box-shadow: 0 0 50px rgba(255, 183, 0, 0.3) !important;
+}
+
+.level0-complete-content .trophy {
+    font-size: 54px;
+    line-height: 1;
+    margin-bottom: 6px;
+    animation: trophyPop 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes trophyPop {
+    0%   { transform: scale(0) rotate(-25deg); opacity: 0; }
+    60%  { transform: scale(1.25) rotate(8deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0deg); }
+}
+
+.level0-complete-title {
+    background: linear-gradient(to right, var(--neon-gold), #ffe600, var(--neon-gold));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 6px !important;
+}
+
+.level0-complete-sub {
+    margin-bottom: 18px !important;
+    color: var(--text-light) !important;
+}
+
+.skills-learned {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 22px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.skill-row {
+    font-size: 12px;
+    color: var(--text-light);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.skill-tick {
+    color: #22c55e;
+    font-weight: 900;
+    text-shadow: 0 0 8px rgba(34, 197, 94, 0.7);
 }

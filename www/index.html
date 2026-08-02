@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260802_0400">
+    <link rel="stylesheet" href="style.css?v=20260802_0500">
     <!-- Sentry Production Error Tracking SDK -->
     <script src="https://browser.sentry-cdn.com/7.114.0/bundle.min.js" crossorigin="anonymous"></script>
     <script>
@@ -95,6 +95,17 @@
 
         <!-- The Game Board Grid -->
         <main class="board-container">
+            <!-- Level 0 tutorial instruction, docked in the empty space at the
+                 TOP of the board so it can never cover the tiles (which stack
+                 upward from the bottom). -->
+            <div id="level0-hint" class="level0-hint hidden">
+                <div class="hint-box">
+                    <h3 class="hint-title"></h3>
+                    <p class="hint-text"></p>
+                    <div class="hint-progress"></div>
+                </div>
+            </div>
+
             <div class="board-wrapper">
                 <div id="game-board" class="game-board">
                     <!-- Tile Matrix Container (100% - 24px height, zero tile clipping) -->
@@ -297,14 +308,23 @@
         </div>
     </div>
 
-    <!-- Level 0 Tutorial Hint Overlay (shown during gameplay) -->
-    <div id="level0-hint" class="level0-hint hidden">
-        <div class="hint-box">
-            <h3 class="hint-title"></h3>
-            <p class="hint-text"></p>
+    <!-- Level 0 completion celebration -->
+    <div id="level0-complete-overlay" class="overlay hidden">
+        <div class="overlay-content level0-complete-content">
+            <div class="trophy">🏆</div>
+            <h2 class="level0-complete-title">TUTORIAL PASSED!</h2>
+            <p class="level0-complete-sub">You've got the moves. Time to play for real.</p>
+
+            <div class="skills-learned">
+                <div class="skill-row"><span class="skill-tick">✓</span> Swap tiles left, right &amp; down</div>
+                <div class="skill-row"><span class="skill-tick">✓</span> Spell words of 3+ letters</div>
+                <div class="skill-row"><span class="skill-tick">✓</span> Clear tiles before they stack up</div>
+            </div>
+
+            <button id="btn-level0-start" class="action-btn primary">START LEVEL 1 →</button>
         </div>
     </div>
 
-    <script type="module" src="game.js?v=20260802_0400"></script>
+    <script type="module" src="game.js?v=20260802_0500"></script>
 </body>
 </html>
