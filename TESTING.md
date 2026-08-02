@@ -284,3 +284,77 @@ Native-side caveat (not coverable in jsdom): the three Capacitor plugins
 (@capacitor/haptics, @capacitor/share, @capacitor/local-notifications) need
 `npx cap sync ios` run on the Mac (CocoaPods) before the Xcode build picks
 them up; until then every native call is a guarded no-op by design.
+
+---
+
+## HAPTICS_SETUP — native plugins are NOT installed yet
+
+**Symptom:** no haptic feedback anywhere in the game on a real device.
+The Share button and the streak reminder notification are also silently
+dead, for the same reason.
+
+**Root cause:** CocoaPods has never actually run for this project. Both
+`ios/App/Podfile.lock` and `ios/App/Pods/Manifest.lock` are placeholder
+stubs:
+
+```
+PODS:
+DEPENDENCIES:
+SPEC CHECKSUMS:
+PODFILE CHECKSUM: 12345      <- not a real checksum
+COCOAPODS: 1.12.0
+```
+
+`ios/App/Pods/` contains only `Manifest.lock` and `Target Support Files/`
+— none of the plugin sources. So `CapacitorHaptics`, `CapacitorShare` and
+`CapacitorLocalNotifications` are declared in the `Podfile` but are not
+compiled into the app. At runtime `window.Capacitor.Plugins.Haptics` is
+`undefined`, and `hapticImpact()` correctly no-ops.
+
+The JS side is fine and is covered by tests. This is purely a native
+build step, and it can only be done on the Mac.
+
+### Fix (run on the Mac)
+
+```bash
+# 1. CocoaPods must be installed
+sudo gem install cocoapods        # or: brew install cocoapods
+
+# 2. From the project root
+cd /Users/manu/Desktop/projects/wordrop
+npm install
+npx cap sync ios
+```
+
+`npx cap sync ios` runs `pod install` as part of its job. If CocoaPods is
+missing it prints a warning and *skips* that step, which is most likely
+what happened before — the sync appeared to succeed.
+
+### Verify it worked
+
+`ios/App/Podfile.lock` should now list the real pods and a real checksum:
+
+```
+PODS:
+  - Capacitor (6.x.x)
+  - CapacitorCordova (6.x.x)
+  - CapacitorHaptics (6.x.x)
+  - CapacitorLocalNotifications (6.x.x)
+  - CapacitorShare (6.x.x)
+  ...
+PODFILE CHECKSUM: <a long real hash>
+```
+
+and `ios/App/Pods/` should contain a directory per pod.
+
+Then **open `App.xcworkspace`, not `App.xcodeproj`** — the plugins only
+link through the workspace.
+
+### Checking on device
+
+- Haptics need a real iPhone; the Simulator produces nothing.
+- **Settings -> Sounds & Haptics -> System Haptics** must be on.
+- **Low Power Mode disables haptics entirely.**
+- Expected feel: light tap on a 3-4 letter clear, medium on 5+, a heavy
+  thump on a glow-tile row burst, a success buzz on each tutorial step
+  and level completion, and an error buzz on level failure.

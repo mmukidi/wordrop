@@ -408,16 +408,36 @@ function capPlugin(name) {
     return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins[name]) || null;
 }
 
-function hapticImpact(style) { // "Light" | "Medium" | "Heavy"
+/* Real bug fix (2026-08-02): these passed title-case strings ("Light",
+ * "Success"). The plugin's ImpactStyle/NotificationType enums are
+ * UPPERCASE, and HapticsPlugin.swift compares them with an exact `==`:
+ *
+ *   impact:       starts at .heavy, matches only "MEDIUM" / "LIGHT"
+ *   notification: starts at .success, matches only "WARNING" / "ERROR"
+ *
+ * So "Light" fell through to a HEAVY thump on every word clear, and the
+ * game-over "Error" buzz was delivered as a cheerful SUCCESS. Normalise to
+ * uppercase and validate, so a bad argument can never silently become the
+ * wrong physical sensation.
+ *
+ * NOTE: none of this fires at all until CocoaPods has actually installed
+ * the Capacitor plugins -- see HAPTICS_SETUP note in TESTING.md.
+ */
+const IMPACT_STYLES = ["LIGHT", "MEDIUM", "HEAVY"];
+const NOTIFICATION_TYPES = ["SUCCESS", "WARNING", "ERROR"];
+
+function hapticImpact(style) { // "Light" | "Medium" | "Heavy" (any case)
     const h = capPlugin("Haptics");
     if (!h || !h.impact) return;
-    h.impact({ style }).catch(() => {});
+    const s = String(style || "").toUpperCase();
+    h.impact({ style: IMPACT_STYLES.includes(s) ? s : "LIGHT" }).catch(() => {});
 }
 
-function hapticNotification(type) { // "Success" | "Warning" | "Error"
+function hapticNotification(type) { // "Success" | "Warning" | "Error" (any case)
     const h = capPlugin("Haptics");
     if (!h || !h.notification) return;
-    h.notification({ type }).catch(() => {});
+    const t = String(type || "").toUpperCase();
+    h.notification({ type: NOTIFICATION_TYPES.includes(t) ? t : "SUCCESS" }).catch(() => {});
 }
 
 /* --- Daily Challenge + streaks ---
