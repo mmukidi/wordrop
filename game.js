@@ -83,6 +83,16 @@ let score = 0;
 let highScore = 0;
 let level = 1;
 let wordsClearedCount = 0;
+
+// Progress within the CURRENT level only -- what the goal bar reads from,
+// and what stars are judged on. Reset every time a level starts or restarts.
+let levelScore = 0;
+let levelWords = 0;
+// Total score as it stood when this level began, so a retry rolls back to
+// it instead of letting the player farm points off repeated attempts.
+let scoreAtLevelStart = 0;
+// True between hitting the target and the player dismissing the celebration.
+let levelCompletePending = false;
 let isPlaying = false;
 let isPaused = false;
 let isBoardLocked = false;
@@ -148,22 +158,101 @@ let riseDeferredSince = 0;
 // Hard cap on that deferral, so resting a finger on the board can never
 // stall the game indefinitely.
 const MAX_RISE_DEFER_MS = 2000;
+/* Rise speed per level, in seconds per new row.
+ *
+ * Rebalanced 2026-08-02. The old curve bottomed out at 1.5s, which is not a
+ * difficulty setting -- it's a countdown. Modelling the tile economy (a rise
+ * adds 8 tiles; a word clear removes ~3.3; a strong player clears one word
+ * roughly every 3.5s) showed a level-10 board buries a strong player in
+ * ~18 seconds no matter how well they play, and levels 7-10 could not be
+ * survived long enough to score meaningfully. Those levels were advertised
+ * in the level menu but were never actually playable.
+ *
+ * The softened curve keeps every level winnable-but-hard, and is capped at
+ * 4s from level 10 on. Past 10 the score multiplier keeps rising while the
+ * speed holds, so the ceiling grows and the ladder stays climbable forever.
+ * See balance/verify.js for the model this was tuned against.
+ */
 const LEVEL_SPEEDS = {
-    1: 15.0, // Level 1: 15s per row
-    2: 12.0, // Level 2: 12s per row (-3s)
-    3: 9.0,  // Level 3: 9s per row (-3s)
-    4: 6.0,  // Level 4: 6s per row (-3s)
-    5: 4.5,  // Level 5: 4.5s per row
-    6: 3.5,  // Level 6: 3.5s per row
-    7: 3.0,  // Level 7: 3.0s per row
-    8: 2.5,  // Level 8: 2.5s per row
-    9: 2.0,  // Level 9: 2.0s per row
-    10: 1.5  // Level 10: 1.5s per row (HARD MODE!)
+    1: 15.0,  // endless for a competent player -- the learning level
+    2: 12.5,
+    3: 10.5,
+    4: 9.0,
+    5: 7.5,   // pressure becomes real here
+    6: 6.5,
+    7: 5.5,
+    8: 5.0,
+    9: 4.5,
+    10: 4.0   // speed cap: level 11+ stays at 4.0s
 };
+const MAX_RISE_SPEED = 4.0;
 
 function getLevelMultiplier(lvl) {
     // Level 1 = 1.0x, Level 2 = 1.5x (+50%), Level 3 = 2.0x (+100%), Level 4 = 2.5x (+150%)...
     return 1 + (lvl - 1) * 0.5;
+}
+
+/* --- Level goals & stars -------------------------------------------------
+ * Every level is now a stated objective: score N points on this board before
+ * the tiles overflow. The player can always see the goal and how close they
+ * are to it, and completing one is a real event rather than a surprise
+ * popup.
+ *
+ * The curve is calibrated against a 6,000-board Monte Carlo run using the
+ * real letter weights, the real 172k dictionary and the real
+ * calculateWordScore(): a 4-row board offers ~6.8 valid words, the best of
+ * which is worth ~9.5 pts at 1.0x. Targets are therefore set so a level
+ * takes roughly 12-16 good clears, and they scale with getLevelMultiplier()
+ * so the difficulty comes from the rising speed rather than from the target
+ * inflating faster than scoring does.
+ */
+const LEVEL_TARGETS = [100, 175, 250, 325, 400, 475, 550, 625, 700, 775];
+const LEVEL_TARGET_STEP = 50; // added per level beyond the table
+
+function getLevelTarget(lvl) {
+    if (lvl <= 0) return LEVEL_TARGETS[0];
+    if (lvl <= LEVEL_TARGETS.length) return LEVEL_TARGETS[lvl - 1];
+    return LEVEL_TARGETS[LEVEL_TARGETS.length - 1] + (lvl - LEVEL_TARGETS.length) * LEVEL_TARGET_STEP;
+}
+
+// "Par": how many near-best words it should take to clear the level. Stars
+// are awarded on efficiency against this, so finding one 6-letter word beats
+// spamming three 3-letter ones -- the skill a word game should reward.
+const AVG_BEST_WORD_SCORE = 9.5; // measured, see comment above
+
+function getLevelPar(lvl) {
+    return Math.max(3, Math.ceil(getLevelTarget(lvl) / (AVG_BEST_WORD_SCORE * getLevelMultiplier(lvl))));
+}
+
+// 3 stars = at or under par, 2 = within 40% over, 1 = completed at all.
+function starsForLevel(lvl, wordsUsed) {
+    const par = getLevelPar(lvl);
+    if (wordsUsed <= par) return 3;
+    if (wordsUsed <= Math.round(par * 1.4)) return 2;
+    return 1;
+}
+
+function getStarsMap() {
+    try { return JSON.parse(localStorage.getItem("wordrop_level_stars") || "{}"); }
+    catch { return {}; }
+}
+
+function recordLevelStars(lvl, stars) {
+    const map = getStarsMap();
+    const prev = map[lvl] || 0;
+    if (stars > prev) {
+        map[lvl] = stars;
+        localStorage.setItem("wordrop_level_stars", JSON.stringify(map));
+    }
+    return Math.max(prev, stars);
+}
+
+function getTotalStars() {
+    return Object.values(getStarsMap()).reduce((sum, s) => sum + s, 0);
+}
+
+function getBestLevelReached() {
+    return parseInt(localStorage.getItem("wordrop_best_level") || "1", 10) || 1;
 }
 
 // Powerups state
@@ -1007,6 +1096,25 @@ function setupEventListeners() {
         level0StartLevel1();
     });
 
+    // Level goal flow
+    const btnNextLevel = document.getElementById("btn-next-level");
+    if (btnNextLevel) btnNextLevel.addEventListener("click", () => {
+        audio.playClick();
+        advanceToNextLevel();
+    });
+    const btnRetryLevel = document.getElementById("btn-retry-level");
+    if (btnRetryLevel) btnRetryLevel.addEventListener("click", () => {
+        audio.playClick();
+        retryLevel();
+    });
+    const btnQuitRun = document.getElementById("btn-quit-run");
+    if (btnQuitRun) btnQuitRun.addEventListener("click", () => {
+        audio.playClick();
+        const failed = document.getElementById("level-failed-overlay");
+        if (failed) failed.classList.add("hidden");
+        openLevelSelectModal();
+    });
+
     btnShuffle.addEventListener("click", triggerShuffle);
     btnHint.addEventListener("click", triggerHint);
     if (btnVortex) btnVortex.addEventListener("click", triggerVortex);
@@ -1080,11 +1188,15 @@ function selectLevel(targetLvl) {
     });
 
     audio.playLevelUp();
-    showWordClearPopup(`LEVEL ${level} SELECTED!`, { el: boardEl });
+
+    // Each level is its own board with its own target now, so jumping to a
+    // level deals that level fresh rather than re-speeding the current board.
+    score = 0;
+    startLevelBoard();
+    showWordClearPopup(`LEVEL ${level} · ${getLevelTarget(level)} PTS`, { el: boardEl });
 
     riseProgress = 0;
     if (timerBarEl) timerBarEl.style.width = "0%";
-    startRiseTimer();
     closeLevelSelectModal();
 }
 
@@ -1104,7 +1216,9 @@ function getTileMatrixContainer() {
     return document.getElementById("tile-matrix") || document.getElementById("game-board") || boardEl;
 }
 
-function startGame() {
+// keepScore: used when moving between levels of the same run (level
+// complete / retry), where the running total must survive the new board.
+function startGame({ keepScore = false } = {}) {
     // Daily Challenge: re-seed the PRNG at the top of EVERY daily run
     // (not just the first) so replaying today's daily always deals the
     // identical board. Non-daily runs leave dailyRng untouched/unused.
@@ -1113,12 +1227,19 @@ function startGame() {
     }
 
     // Reset scores & states
-    score = 0;
-    // Level 0 sets level before calling startGame; don't override it
-    if (!isLevel0) {
-        level = isDailyMode ? DAILY_START_LEVEL : 1;
+    if (!keepScore) {
+        score = 0;
+        scoreAtLevelStart = 0;
+        // Level 0 sets level before calling startGame; don't override it
+        if (!isLevel0) {
+            level = isDailyMode ? DAILY_START_LEVEL : 1;
+        }
     }
-    wordsClearedCount = 0;
+    // Level-scoped progress always restarts with the board.
+    levelScore = 0;
+    levelWords = 0;
+    levelCompletePending = false;
+    wordsClearedCount = keepScore ? wordsClearedCount : 0;
     longestWordSpelled = "—";
     isPlaying = true;
     isPaused = false;
@@ -1147,6 +1268,10 @@ function startGame() {
     // Hide Overlays
     if (pauseOverlay) pauseOverlay.classList.add("hidden");
     if (gameOverOverlay) gameOverOverlay.classList.add("hidden");
+    const lcOverlay = document.getElementById("level-complete-overlay");
+    if (lcOverlay) lcOverlay.classList.add("hidden");
+    const lfOverlay = document.getElementById("level-failed-overlay");
+    if (lfOverlay) lfOverlay.classList.add("hidden");
     if (comboBadge) comboBadge.classList.add("hidden");
     if (wordPopup) wordPopup.classList.add("hidden");
 
@@ -1189,6 +1314,8 @@ function startGame() {
         hideLevel0Hint();
         level0UnlockAllControls();
     }
+
+    renderGoalHUD();
 
     // Start Rise Timer. Level 0 keeps the board completely still until the
     // player reaches the final step, so nothing can kill them mid-lesson.
@@ -1889,8 +2016,9 @@ async function sliceClearWord(match) {
 
     // Score Calculations
     const scoreResult = calculateWordScore(match, 1);
-    updateScore(scoreResult.score);
     wordsClearedCount++;
+    levelWords++; // counted before updateScore, so stars judge this word too
+    updateScore(scoreResult.score);
 
     // Glow tile payoff: this single word's score met the threshold of a
     // glow tile living anywhere in its row/column — blow the whole line.
@@ -2032,7 +2160,15 @@ function calculateWordScore(match, comboStreak) {
     const directionMult = match.direction === "vertical" ? 1.5 : 1.0;
     const comboMult = 1.0 + (comboStreak - 1) * 0.5;
 
-    const finalScore = Math.round(baseScore * lengthMult * directionMult * comboMult);
+    // Real bug fix (2026-08-02): getLevelMultiplier() existed but was never
+    // called anywhere, so the "1.5x ... 5.5x Pts" advertised on every level
+    // button -- and "+50% more points per word" in HOW TO PLAY -- did
+    // nothing. Picking a harder level bought you a faster board for exactly
+    // the same score, which quietly removed the entire risk/reward reason to
+    // level up. The level targets below are calibrated assuming this applies.
+    const levelMult = getLevelMultiplier(level);
+
+    const finalScore = Math.round(baseScore * lengthMult * directionMult * comboMult * levelMult);
     
     return {
         word: match.word,
@@ -2153,7 +2289,7 @@ function startRiseTimer() {
     riseTimerInterval = setInterval(() => {
         if (!isPlaying || isPaused || isBoardLocked) return;
 
-        const duration = LEVEL_SPEEDS[level] || 15.0;
+        const duration = LEVEL_SPEEDS[level] || MAX_RISE_SPEED;
         // Increment progress (ticks every 100ms)
         riseProgress += (100 / (duration * 10));
 
@@ -2208,7 +2344,12 @@ async function pushGridUp() {
         // 1. Check for Game Over: Is any tile at Row 13 (top boundary)?
         for (let x = 0; x < GRID_COLS; x++) {
             if (grid[GRID_ROWS - 1][x] !== null) {
-                triggerGameOver();
+                // Overflow now fails the LEVEL, not the whole run: the
+                // player retries this level rather than restarting at 1.
+                // Daily Challenge keeps the classic single-run game over so
+                // the shared daily score stays comparable between players.
+                if (isDailyMode) triggerGameOver();
+                else failLevel();
                 return;
             }
         }
@@ -2364,6 +2505,7 @@ function startShuffleCooldown() {
 
 function updateScore(amount) {
     score += amount;
+    levelScore += amount;
     scoreValEl.textContent = formatScore(score);
 
     // Save High Score
@@ -2373,39 +2515,164 @@ function updateScore(amount) {
         localStorage.setItem("wordrop_high_score", highScore);
     }
 
+    renderGoalHUD();
     checkLevelProgression();
 }
 
+// Called after every score change. A level now ends the moment its stated
+// target is met, rather than drifting upward on hidden thresholds.
 function checkLevelProgression() {
-    // Level 2 unlock condition: score >= 100 OR wordsClearedCount >= 4
-    let targetLevel = 1;
-    if (score >= 4000 || wordsClearedCount >= 40) targetLevel = 6 + Math.floor((score - 4000) / 3000);
-    else if (score >= 2200 || wordsClearedCount >= 25) targetLevel = 5;
-    else if (score >= 1200 || wordsClearedCount >= 16) targetLevel = 4;
-    else if (score >= 500 || wordsClearedCount >= 9) targetLevel = 3;
-    else if (score >= 100 || wordsClearedCount >= 4) targetLevel = 2;
+    if (isLevel0 || levelCompletePending) return;
+    if (levelScore < getLevelTarget(level)) return;
+    completeLevel();
+}
 
-    if (targetLevel > level) {
-        level = targetLevel;
-        levelValEl.textContent = isDailyMode ? `${level}🔥` : level;
+function completeLevel() {
+    levelCompletePending = true;
+    isPaused = true;
+    if (riseTimerInterval) { clearInterval(riseTimerInterval); riseTimerInterval = null; }
 
-        // Triumphant Level Up effects!
-        audio.playLevelUp();
-        hapticNotification("Success");
-        triggerScreenShake();
-        showWordClearPopup(`LEVEL ${level} UNLOCKED!`, { el: boardEl });
+    const stars = starsForLevel(level, levelWords);
+    const bestStars = recordLevelStars(level, stars);
+    const isNewBest = stars >= bestStars && stars > 0;
 
-        // Level Up Reward: Reset rise timer progress to give player a fresh breathing start
-        riseProgress = 0;
-        if (timerBarEl) timerBarEl.style.width = "0%";
-
-        if (level >= 5) gcUnlockOnce("wordrop_ach_level5_done", GC_ACH_LEVEL_5);
-        if (level >= 10) gcUnlockOnce("wordrop_ach_level10_done", GC_ACH_LEVEL_10);
+    if (level + 1 > getBestLevelReached()) {
+        localStorage.setItem("wordrop_best_level", String(level + 1));
     }
+
+    audio.playLevelUp();
+    hapticNotification("Success");
+    triggerScreenShake();
+
+    if (level >= 5) gcUnlockOnce("wordrop_ach_level5_done", GC_ACH_LEVEL_5);
+    if (level >= 10) gcUnlockOnce("wordrop_ach_level10_done", GC_ACH_LEVEL_10);
+    gcSubmitScore(score);
+
+    showLevelCompleteOverlay(stars, isNewBest);
+}
+
+// Dismissing the celebration deals a fresh board for the next level. Each
+// level being its own board is what makes "retry this level" coherent.
+function advanceToNextLevel() {
+    const overlay = document.getElementById("level-complete-overlay");
+    if (overlay) overlay.classList.add("hidden");
+    levelCompletePending = false;
+    level++;
+    startLevelBoard();
+    showWordClearPopup(`LEVEL ${level}!`, { el: boardEl });
+}
+
+// Fresh board for the current level, preserving the running total score.
+function startLevelBoard() {
+    scoreAtLevelStart = score;
+    startGame({ keepScore: true });
+}
+
+// Overflow before the target was met: the level is failed, not the run.
+function failLevel() {
+    isPlaying = false;
+    if (riseTimerInterval) { clearInterval(riseTimerInterval); riseTimerInterval = null; }
+    audio.playGameOver();
+    hapticNotification("Error");
+    audio.stopAmbience();
+    if (boardEl) boardEl.classList.remove("danger");
+    showLevelFailedOverlay();
+}
+
+// Retry rolls the total score back to where this level began, so repeated
+// attempts can't be farmed for points.
+function retryLevel() {
+    const overlay = document.getElementById("level-failed-overlay");
+    if (overlay) overlay.classList.add("hidden");
+    score = scoreAtLevelStart;
+    if (scoreValEl) scoreValEl.textContent = formatScore(score);
+    startLevelBoard();
+    showWordClearPopup(`LEVEL ${level} — GO!`, { el: boardEl });
 }
 
 function formatScore(val) {
     return String(val).padStart(6, "0");
+}
+
+/* --- Goal HUD ---
+ * The single most important addition: the player can always see what they
+ * are working toward and how close they are. Previously levels arrived as a
+ * surprise popup driven by thresholds nothing on screen ever mentioned.
+ */
+function renderGoalHUD() {
+    const bar = document.getElementById("goal-bar");
+    const label = document.getElementById("goal-label");
+    const value = document.getElementById("goal-value");
+    const wrap = document.getElementById("goal-container");
+    if (!wrap) return;
+
+    if (isLevel0) { wrap.classList.add("hidden"); return; }
+    wrap.classList.remove("hidden");
+
+    const target = getLevelTarget(level);
+    const pct = Math.max(0, Math.min(100, (levelScore / target) * 100));
+    if (bar) bar.style.width = `${pct}%`;
+    if (label) label.textContent = `LEVEL ${level} GOAL`;
+    if (value) value.textContent = `${Math.min(levelScore, target)} / ${target}`;
+
+    // Visibly "hot" as the player closes in on the target.
+    if (wrap.classList) wrap.classList.toggle("near-goal", pct >= 75 && pct < 100);
+}
+
+function starMarkup(stars) {
+    return [0, 1, 2].map(i =>
+        `<span class="star ${i < stars ? "earned" : "empty"}" style="--i:${i}">${i < stars ? "★" : "☆"}</span>`
+    ).join("");
+}
+
+function showLevelCompleteOverlay(stars, isNewBest) {
+    const overlay = document.getElementById("level-complete-overlay");
+    if (!overlay) { advanceToNextLevel(); return; }
+
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set("lc-title", `LEVEL ${level} COMPLETE!`);
+    set("lc-score", levelScore.toLocaleString());
+    set("lc-words", String(levelWords));
+    set("lc-par", `${levelWords} / ${getLevelPar(level)}`);
+    set("lc-total-stars", `${getTotalStars()} ★`);
+    set("lc-next-target", `Next up: ${getLevelTarget(level + 1).toLocaleString()} pts`);
+
+    const starsEl = document.getElementById("lc-stars");
+    if (starsEl) starsEl.innerHTML = starMarkup(stars);
+
+    const praiseEl = document.getElementById("lc-praise");
+    if (praiseEl) {
+        praiseEl.textContent = stars === 3
+            ? "Flawless — you found the big words."
+            : stars === 2
+                ? "Strong clear. Fewer, longer words for 3 stars."
+                : "Level cleared! Longer words score far more.";
+    }
+
+    const bestEl = document.getElementById("lc-new-best");
+    if (bestEl) bestEl.classList.toggle("hidden", !isNewBest || stars < 3);
+
+    overlay.classList.remove("hidden");
+}
+
+function showLevelFailedOverlay() {
+    const overlay = document.getElementById("level-failed-overlay");
+    if (!overlay) { gameOverOverlay.classList.remove("hidden"); return; }
+
+    const target = getLevelTarget(level);
+    const set = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+    set("lf-title", `LEVEL ${level} FAILED`);
+    set("lf-progress", `${levelScore} / ${target}`);
+    set("lf-short-by", `${Math.max(0, target - levelScore)} points short`);
+
+    const bar = document.getElementById("lf-bar");
+    if (bar) bar.style.width = `${Math.min(100, (levelScore / target) * 100)}%`;
+
+    set("lf-retry-btn-label", `RETRY LEVEL ${level}`);
+    const retryBtn = document.getElementById("btn-retry-level");
+    if (retryBtn) retryBtn.textContent = `RETRY LEVEL ${level}`;
+
+    overlay.classList.remove("hidden");
 }
 
 /* --- UI FX (Sparks, Floating Popups, Combo) --- */

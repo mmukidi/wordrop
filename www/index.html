@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260802_0500">
+    <link rel="stylesheet" href="style.css?v=20260802_0600">
     <!-- Sentry Production Error Tracking SDK -->
     <script src="https://browser.sentry-cdn.com/7.114.0/bundle.min.js" crossorigin="anonymous"></script>
     <script>
@@ -77,6 +77,18 @@
             <div class="timer-label">NEXT RISE <span id="timer-countdown-val" class="timer-countdown">15s</span></div>
             <div class="timer-track">
                 <div id="timer-bar" class="timer-bar"></div>
+            </div>
+        </div>
+
+        <!-- Level Goal HUD — always visible, so the player knows what
+             they're working toward and how close they are. -->
+        <div id="goal-container" class="goal-container">
+            <div class="goal-head">
+                <span id="goal-label" class="goal-label">LEVEL 1 GOAL</span>
+                <span id="goal-value" class="goal-value">0 / 100</span>
+            </div>
+            <div class="goal-track">
+                <div id="goal-bar" class="goal-bar"></div>
             </div>
         </div>
 
@@ -222,48 +234,48 @@
                 <p id="daily-status" class="daily-status"></p>
             </div>
 
-            <p>Higher levels rise 3s faster but award +50% more points per word!</p>
+            <p>Each level has a points goal. Higher levels rise faster but every word scores far more — hit the goal before the tiles reach the top.</p>
 
             <div class="level-grid">
                 <button class="level-select-btn active" data-lvl="1">
                     <span class="lvl-title">LVL 1</span>
-                    <span class="lvl-detail">15s • 1.0x Pts</span>
+                    <span class="lvl-detail">Goal 100 · 15s · 1.0x</span>
                 </button>
                 <button class="level-select-btn" data-lvl="2">
                     <span class="lvl-title">LVL 2</span>
-                    <span class="lvl-detail">12s • 1.5x Pts</span>
+                    <span class="lvl-detail">Goal 175 · 12.5s · 1.5x</span>
                 </button>
                 <button class="level-select-btn" data-lvl="3">
                     <span class="lvl-title">LVL 3</span>
-                    <span class="lvl-detail">9s • 2.0x Pts</span>
+                    <span class="lvl-detail">Goal 250 · 10.5s · 2.0x</span>
                 </button>
                 <button class="level-select-btn" data-lvl="4">
                     <span class="lvl-title">LVL 4</span>
-                    <span class="lvl-detail">6s • 2.5x Pts</span>
+                    <span class="lvl-detail">Goal 325 · 9s · 2.5x</span>
                 </button>
                 <button class="level-select-btn" data-lvl="5">
                     <span class="lvl-title">LVL 5</span>
-                    <span class="lvl-detail">4.5s • 3.0x Pts</span>
+                    <span class="lvl-detail">Goal 400 · 7.5s · 3.0x</span>
                 </button>
                 <button class="level-select-btn" data-lvl="6">
                     <span class="lvl-title">LVL 6</span>
-                    <span class="lvl-detail">3.5s • 3.5x Pts</span>
+                    <span class="lvl-detail">Goal 475 · 6.5s · 3.5x</span>
                 </button>
                 <button class="level-select-btn" data-lvl="7">
                     <span class="lvl-title">LVL 7</span>
-                    <span class="lvl-detail">3.0s • 4.0x Pts</span>
+                    <span class="lvl-detail">Goal 550 · 5.5s · 4.0x</span>
                 </button>
                 <button class="level-select-btn" data-lvl="8">
                     <span class="lvl-title">LVL 8</span>
-                    <span class="lvl-detail">2.5s • 4.5x Pts</span>
+                    <span class="lvl-detail">Goal 625 · 5s · 4.5x</span>
                 </button>
                 <button class="level-select-btn" data-lvl="9">
                     <span class="lvl-title">LVL 9</span>
-                    <span class="lvl-detail">2.0s • 5.0x Pts</span>
+                    <span class="lvl-detail">Goal 700 · 4.5s · 5.0x</span>
                 </button>
                 <button class="level-select-btn" data-lvl="10">
                     <span class="lvl-title">LVL 10 🔥</span>
-                    <span class="lvl-detail">1.5s • 5.5x Pts</span>
+                    <span class="lvl-detail">Goal 775 · 4s · 5.5x</span>
                 </button>
             </div>
 
@@ -308,6 +320,60 @@
         </div>
     </div>
 
+    <!-- Level Complete celebration -->
+    <div id="level-complete-overlay" class="overlay hidden">
+        <div class="overlay-content level-complete-content">
+            <h2 id="lc-title" class="lc-title">LEVEL 1 COMPLETE!</h2>
+
+            <div id="lc-stars" class="stars-row"></div>
+            <p id="lc-praise" class="lc-praise"></p>
+
+            <div id="lc-new-best" class="new-best-badge hidden">⭐ NEW BEST — 3 STARS!</div>
+
+            <div class="final-stats">
+                <div class="final-stat-item">
+                    <span class="label">LEVEL SCORE</span>
+                    <span id="lc-score" class="value">0</span>
+                </div>
+                <div class="final-stat-item">
+                    <span class="label">WORDS USED / PAR</span>
+                    <span id="lc-par" class="value">0 / 0</span>
+                </div>
+                <div class="final-stat-item">
+                    <span class="label">TOTAL STARS</span>
+                    <span id="lc-total-stars" class="value">0 ★</span>
+                </div>
+            </div>
+
+            <p id="lc-next-target" class="lc-next"></p>
+            <button id="btn-next-level" class="action-btn primary">NEXT LEVEL →</button>
+        </div>
+    </div>
+
+    <!-- Level Failed -->
+    <div id="level-failed-overlay" class="overlay hidden">
+        <div class="overlay-content level-failed-content">
+            <h2 id="lf-title" class="lf-title">LEVEL FAILED</h2>
+            <p class="lf-sub">The tiles reached the top before you hit the goal.</p>
+
+            <div class="lf-progress-wrap">
+                <div class="goal-head">
+                    <span class="goal-label">YOU REACHED</span>
+                    <span id="lf-progress" class="goal-value">0 / 100</span>
+                </div>
+                <div class="goal-track">
+                    <div id="lf-bar" class="goal-bar"></div>
+                </div>
+                <p id="lf-short-by" class="lf-short"></p>
+            </div>
+
+            <p class="lf-tip">💡 Longer words score far more — a 6-letter word is worth 2x its letters.</p>
+
+            <button id="btn-retry-level" class="action-btn primary">RETRY LEVEL</button>
+            <button id="btn-quit-run" class="action-btn">BACK TO LEVEL SELECT</button>
+        </div>
+    </div>
+
     <!-- Level 0 completion celebration -->
     <div id="level0-complete-overlay" class="overlay hidden">
         <div class="overlay-content level0-complete-content">
@@ -325,6 +391,6 @@
         </div>
     </div>
 
-    <script type="module" src="game.js?v=20260802_0500"></script>
+    <script type="module" src="game.js?v=20260802_0600"></script>
 </body>
 </html>

@@ -1218,6 +1218,192 @@ body {
     }
 }
 
+/* ==========================================================================
+   Level Goal HUD (2026-08-02) — always-visible objective + progress.
+   ========================================================================== */
+.goal-container {
+    flex-shrink: 0;
+    background: rgba(189, 0, 255, 0.07);
+    border: 1px solid rgba(189, 0, 255, 0.35);
+    border-radius: 6px;
+    padding: 4px 8px 5px;
+    margin-bottom: 4px;
+    transition: border-color 0.3s, box-shadow 0.3s, background-color 0.3s;
+}
+
+.goal-container.hidden { display: none; }
+
+.goal-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 3px;
+}
+
+.goal-label {
+    font-family: 'Outfit', sans-serif;
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: var(--neon-purple);
+}
+
+.goal-value {
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 900;
+    color: #fff;
+}
+
+.goal-track {
+    height: 6px;
+    background: rgba(0, 0, 0, 0.45);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.goal-bar {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    background: linear-gradient(to right, var(--neon-purple), var(--neon-cyan));
+    box-shadow: 0 0 10px rgba(189, 0, 255, 0.6);
+    transition: width 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Closing in on the goal — the HUD gets visibly hot. */
+.goal-container.near-goal {
+    border-color: var(--neon-gold);
+    background: rgba(255, 183, 0, 0.1);
+    box-shadow: 0 0 14px rgba(255, 183, 0, 0.3);
+    animation: goalPulse 0.9s ease-in-out infinite alternate;
+}
+
+.goal-container.near-goal .goal-label { color: var(--neon-gold); }
+
+.goal-container.near-goal .goal-bar {
+    background: linear-gradient(to right, var(--neon-gold), #ffe600);
+    box-shadow: 0 0 14px rgba(255, 183, 0, 0.9);
+}
+
+@keyframes goalPulse {
+    from { box-shadow: 0 0 10px rgba(255, 183, 0, 0.25); }
+    to   { box-shadow: 0 0 20px rgba(255, 183, 0, 0.55); }
+}
+
+/* ---- Level Complete celebration ---- */
+.level-complete-content {
+    border-color: var(--neon-gold) !important;
+    box-shadow: 0 0 50px rgba(255, 183, 0, 0.28) !important;
+}
+
+.lc-title {
+    background: linear-gradient(to right, var(--neon-gold), #ffe600, var(--neon-gold));
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 4px !important;
+}
+
+.stars-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin: 6px 0 10px;
+}
+
+.stars-row .star {
+    font-size: 44px;
+    line-height: 1;
+    display: inline-block;
+}
+
+/* Stars pop in one after another for a proper little payoff. */
+.stars-row .star.earned {
+    color: var(--neon-gold);
+    text-shadow: 0 0 18px rgba(255, 183, 0, 0.9);
+    animation: starPop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) backwards;
+    animation-delay: calc(var(--i) * 0.22s + 0.1s);
+}
+
+.stars-row .star.empty {
+    color: rgba(255, 255, 255, 0.16);
+}
+
+@keyframes starPop {
+    0%   { transform: scale(0) rotate(-45deg); opacity: 0; }
+    65%  { transform: scale(1.35) rotate(10deg); opacity: 1; }
+    100% { transform: scale(1) rotate(0); }
+}
+
+.lc-praise {
+    font-size: 12px !important;
+    margin-bottom: 12px !important;
+}
+
+.new-best-badge {
+    display: inline-block;
+    background: rgba(255, 183, 0, 0.15);
+    border: 1px solid var(--neon-gold);
+    color: var(--neon-gold);
+    font-family: 'Outfit', sans-serif;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: 1px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    margin-bottom: 14px;
+    animation: goalPulse 0.8s ease-in-out infinite alternate;
+}
+
+.new-best-badge.hidden { display: none; }
+
+.lc-next {
+    font-size: 11px !important;
+    color: var(--neon-cyan) !important;
+    margin-bottom: 14px !important;
+}
+
+/* ---- Level Failed ---- */
+.level-failed-content {
+    border-color: rgba(239, 68, 68, 0.5) !important;
+    box-shadow: 0 0 40px rgba(239, 68, 68, 0.2) !important;
+}
+
+.lf-title {
+    color: #ef4444 !important;
+    text-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+    margin-bottom: 4px !important;
+}
+
+.lf-sub { margin-bottom: 16px !important; }
+
+.lf-progress-wrap {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 14px;
+}
+
+.lf-short {
+    font-size: 11px !important;
+    color: #ef4444 !important;
+    margin: 6px 0 0 !important;
+}
+
+.lf-tip {
+    font-size: 11px !important;
+    color: var(--text-muted) !important;
+    background: rgba(0, 240, 255, 0.05);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 18px !important;
+}
+
+#btn-quit-run { margin-top: 8px; }
+
 /* Last Spelled Word HUD Style */
 .last-word-container {
     display: flex;
