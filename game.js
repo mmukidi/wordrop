@@ -140,6 +140,14 @@ function forceUnlockBoard() {
 // Grid Rise Timer State
 let riseProgress = 0; // 0 to 100
 let riseTimerInterval = null;
+
+// Timestamp (ms) at which a due rise started being held back because the
+// player had a finger down mid-swipe. 0 = nothing deferred. See the rise
+// tick in startRiseTimer() for why the board must not move under a finger.
+let riseDeferredSince = 0;
+// Hard cap on that deferral, so resting a finger on the board can never
+// stall the game indefinitely.
+const MAX_RISE_DEFER_MS = 2000;
 const LEVEL_SPEEDS = {
     1: 15.0, // Level 1: 15s per row
     2: 12.0, // Level 2: 12s per row (-3s)
@@ -1112,6 +1120,7 @@ function startGame() {
     isPaused = false;
     forceUnlockBoard();
     riseProgress = 0;
+    riseDeferredSince = 0;
     tileIdCounter = 0;
     shuffleCooldownActive = false;
     swipePath = [];
@@ -1470,6 +1479,20 @@ function swipeContinue(clientX, clientY) {
     tile.el.classList.add("selected");
     audio.playSwipeStep(swipePath.length);
     drawSwipePath();
+}
+
+// Abandon an in-progress swipe without scoring it, leaving the board in a
+// clean state. Used when a deferred rise has to fire while a finger is
+// still down (see startRiseTimer) -- resolving a half-traced path across a
+// board shift would score a word the player never actually drew.
+function cancelActiveSwipe() {
+    if (!isSwipingPath && swipePath.length === 0) return;
+    isSwipingPath = false;
+    swipePath = [];
+    if (boardEl) {
+        boardEl.querySelectorAll(".tile.selected").forEach(el => el.classList.remove("selected"));
+    }
+    if (ctx && canvas) ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 function swipeFinish() {
@@ -2047,6 +2070,10 @@ function triggerVortex() {
         return;
     }
 
+    // Vaporising the bottom row drops every column, so an in-flight swipe
+    // would resolve against shifted tiles. See triggerShuffle()/startRiseTimer().
+    cancelActiveSwipe();
+
     // Check if bottom row (y=0) has any tiles
     let hasBottomTiles = false;
     for (let x = 0; x < GRID_COLS; x++) {
@@ -2121,8 +2148,37 @@ function startRiseTimer() {
         riseProgress += (100 / (duration * 10));
 
         if (riseProgress >= 100) {
-            riseProgress = 0;
-            pushGridUp();
+            // Real bug fix (2026-08-02): never shift the board while the
+            // player has a finger down. pushGridUp() moves every tile up one
+            // row, but a swipe is assembled by mapping each touchmove
+            // coordinate to whatever tile currently occupies that cell -- so
+            // a rise landing mid-swipe silently swaps the letters out from
+            // under the finger and the player's carefully traced word
+            // becomes garbage. That's most visible at high levels, where the
+            // rise interval (1.5s at level 10) is shorter than a deliberate
+            // 5-6 letter swipe. Hold the rise until the finger lifts.
+            if (isSwipingPath) {
+                if (riseDeferredSince === 0) riseDeferredSince = Date.now();
+
+                if (Date.now() - riseDeferredSince < MAX_RISE_DEFER_MS) {
+                    // Park the bar at full: the rise is genuinely due and
+                    // the player can see it's about to land.
+                    riseProgress = 100;
+                } else {
+                    // Finger has been down too long to keep stalling the
+                    // game. Drop the in-progress swipe first so the player
+                    // never gets a word built from pre- and post-shift
+                    // tiles, then rise.
+                    cancelActiveSwipe();
+                    riseDeferredSince = 0;
+                    riseProgress = 0;
+                    pushGridUp();
+                }
+            } else {
+                riseDeferredSince = 0;
+                riseProgress = 0;
+                pushGridUp();
+            }
         }
 
         timerBarEl.style.width = `${Math.min(100, riseProgress)}%`;
@@ -2208,7 +2264,13 @@ function updateDangerGlow() {
 
 async function triggerShuffle() {
     if (!isPlaying || isPaused || isBoardLocked || shuffleCooldownActive) return;
-    
+
+    // Shuffle relocates every tile, so an in-flight swipe would finish
+    // against letters the player never traced. Reachable via multi-touch
+    // (one finger dragging the board, another tapping this button). Same
+    // hazard the rise defers for -- see startRiseTimer().
+    cancelActiveSwipe();
+
     setBoardLock(true);
     try {
         audio.playClick();
