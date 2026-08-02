@@ -166,7 +166,29 @@ body {
 
 /* Top Controls Placement */
 .top-controls {
+    margin-bottom: 4px;
+}
+
+/* Icon controls sit on their own compact row (2026-08-02).
+   Previously all 9 buttons shared one row, which crushed the power-up
+   labels -- "SHUFFLE" was rendering as "SHUFFL" even before the music
+   button was added. Six 34px icons plus gaps come to 234px, comfortably
+   inside the ~378px available on a 390pt phone, while the power-ups get
+   the full width above and stay readable. */
+.icon-controls {
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
     margin-bottom: 6px;
+}
+
+.icon-controls .control-btn {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
 }
 
 /* Timer / Rise Bar */
@@ -722,6 +744,29 @@ body {
 
 .control-btn:active {
     transform: scale(0.95);
+}
+
+/* A muted audio channel reads as clearly OFF at a glance: dimmed, greyed,
+   and struck through with a red slash. Music and SFX are separate buttons,
+   so the state of each has to be unambiguous on its own. */
+.control-btn.muted {
+    opacity: 0.4;
+    filter: grayscale(1);
+    position: relative;
+}
+
+.control-btn.muted::after {
+    content: "";
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    top: 50%;
+    height: 2px;
+    background: #ef4444;
+    border-radius: 2px;
+    transform: rotate(-45deg);
+    box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+    pointer-events: none;
 }
 
 /* Overlays */

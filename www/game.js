@@ -437,6 +437,62 @@ function gcAuthenticate() {
         });
 }
 
+/* Haptics are silent when they fail: hapticImpact() correctly no-ops if the
+ * plugin isn't there, which makes "plugin missing" and "device has haptics
+ * switched off" look identical to the player. Report exactly which, so a
+ * missing buzz can be diagnosed without a debugger.
+ */
+function renderHapticsStatus() {
+    const el = document.getElementById("stats-haptics");
+    if (!el) return;
+    const native = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+    const plugin = capPlugin("Haptics");
+
+    let text;
+    if (!native) text = "Not available on web";
+    else if (!plugin) text = "⚠️ Plugin not linked";
+    else text = "✅ Plugin ready";
+
+    el.textContent = text;
+    // Listing what IS registered makes a linking problem obvious at a glance.
+    const names = (window.Capacitor && window.Capacitor.Plugins)
+        ? Object.keys(window.Capacitor.Plugins).join(", ")
+        : "none";
+    el.title = `Registered plugins: ${names}`;
+}
+
+// Fires the strongest haptic available. If the plugin is ready but nothing
+// is felt, the cause is the device (Simulator, System Haptics off, or Low
+// Power Mode) rather than the app.
+function testHaptic() {
+    const plugin = capPlugin("Haptics");
+    if (!plugin) {
+        showWordClearPopup("HAPTICS PLUGIN NOT LINKED", { el: boardEl });
+        return;
+    }
+    hapticNotification("Success");
+    setTimeout(() => hapticImpact("Heavy"), 220);
+    setTimeout(() => hapticImpact("Heavy"), 440);
+    showWordClearPopup("BUZZ SENT — FEEL IT?", { el: boardEl });
+}
+
+// Keep both audio buttons showing their real state, including on first
+// launch when the preferences were restored from a previous session.
+function renderAudioButtons() {
+    const sfxBtn = document.getElementById("btn-sound");
+    if (sfxBtn) {
+        sfxBtn.textContent = audio.sfxEnabled ? "🔊" : "🔇";
+        sfxBtn.classList.toggle("muted", !audio.sfxEnabled);
+        sfxBtn.title = audio.sfxEnabled ? "Mute Sound Effects" : "Unmute Sound Effects";
+    }
+    const musicBtn = document.getElementById("btn-music");
+    if (musicBtn) {
+        musicBtn.textContent = audio.musicEnabled ? "🎵" : "🎵";
+        musicBtn.classList.toggle("muted", !audio.musicEnabled);
+        musicBtn.title = audio.musicEnabled ? "Mute Music" : "Unmute Music";
+    }
+}
+
 function renderGameCenterStatus() {
     const el = document.getElementById("stats-game-center");
     if (!el) return;
@@ -1075,6 +1131,9 @@ async function initGame() {
     // and is a total no-op on the website build (see gcPlugin()).
     gcAuthenticate();
 
+    // Reflect the restored music/SFX preferences on the buttons.
+    renderAudioButtons();
+
     // Start Game (Level 0 if never tutorialized before, else Level 1)
     if (!localStorage.getItem("wordrop_level0_done")) {
         startLevel0();
@@ -1165,9 +1224,19 @@ function setupEventListeners() {
         startGame();
     });
     
+    // Sound effects and music are separate channels, so a player can keep
+    // the word-clear thwack while listening to their own music, or keep the
+    // ambience but stay silent in a quiet room.
     btnSound.addEventListener("click", () => {
-        const soundOn = audio.toggle();
-        btnSound.textContent = soundOn ? "🔊" : "🔇";
+        const on = audio.toggleSfx();
+        renderAudioButtons();
+        if (on) audio.playClick(); // only audible confirmation when turning ON
+    });
+
+    const btnMusic = document.getElementById("btn-music");
+    if (btnMusic) btnMusic.addEventListener("click", () => {
+        audio.toggleMusic();
+        renderAudioButtons();
         audio.playClick();
     });
 
@@ -1239,6 +1308,11 @@ function setupEventListeners() {
     if (btnInfo) btnInfo.addEventListener("click", openInfoModal);
     if (btnCloseInfo) btnCloseInfo.addEventListener("click", closeInfoModal);
     if (btnStats) btnStats.addEventListener("click", openStatsModal);
+    const btnTestHaptic = document.getElementById("btn-test-haptic");
+    if (btnTestHaptic) btnTestHaptic.addEventListener("click", () => {
+        audio.playClick();
+        testHaptic();
+    });
     if (btnCloseStats) btnCloseStats.addEventListener("click", closeStatsModal);
 
     // ========================================================================
@@ -2401,6 +2475,7 @@ function openStatsModal() {
     if (statsRareCountEl) statsRareCountEl.textContent = rareTilesClearedCount;
     if (statsHighScoreEl) statsHighScoreEl.textContent = formatScore(highScore);
     renderGameCenterStatus();
+    renderHapticsStatus();
     if (statsOverlay) statsOverlay.classList.remove("hidden");
 }
 

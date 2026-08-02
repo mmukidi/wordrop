@@ -4,10 +4,31 @@
  * Requires user gesture to unlock the AudioContext.
  */
 
+/* Music and sound effects are INDEPENDENT channels (2026-08-02).
+ * They serve different needs: plenty of players want the satisfying
+ * word-clear thwack while listening to their own music, and others want
+ * the ambience but silence in a quiet room. A single mute forced an
+ * all-or-nothing choice. Both preferences persist across sessions.
+ */
+const SFX_PREF_KEY = "wordrop_sfx_enabled";
+const MUSIC_PREF_KEY = "wordrop_music_enabled";
+
+function loadPref(key) {
+    try {
+        const v = localStorage.getItem(key);
+        return v === null ? true : v === "1"; // default ON for a fresh install
+    } catch { return true; }
+}
+
+function savePref(key, on) {
+    try { localStorage.setItem(key, on ? "1" : "0"); } catch { /* private mode */ }
+}
+
 class GameAudio {
     constructor() {
         this.ctx = null;
-        this.enabled = true;
+        this.sfxEnabled = loadPref(SFX_PREF_KEY);
+        this.musicEnabled = loadPref(MUSIC_PREF_KEY);
         this.ambienceNodes = null;   // set once startAmbience() builds the graph
         this.ambienceDucked = false; // true while paused
     }
@@ -21,24 +42,50 @@ class GameAudio {
         }
     }
 
-    toggle() {
-        this.enabled = !this.enabled;
-        if (this.enabled && this.ctx && this.ctx.state === "suspended") {
-            this.ctx.resume();
-        }
-        // The mute/unmute button also covers the ambient background music,
-        // not just one-shot SFX -- mute by ramping the ambience's own
-        // master gain rather than tearing down/rebuilding the whole node
-        // graph, so unmuting resumes instantly with no click or restart.
+    _resumeIfSuspended() {
+        if (this.ctx && this.ctx.state === "suspended") this.ctx.resume();
+    }
+
+    // One-shot sound effects only. Music is unaffected.
+    toggleSfx() {
+        this.sfxEnabled = !this.sfxEnabled;
+        savePref(SFX_PREF_KEY, this.sfxEnabled);
+        if (this.sfxEnabled) this._resumeIfSuspended();
+        return this.sfxEnabled;
+    }
+
+    // Ambient soundtrack only. Sound effects are unaffected. Muting ramps
+    // the ambience's own master gain rather than tearing down and
+    // rebuilding the node graph, so unmuting resumes instantly with no
+    // click and without restarting the track.
+    toggleMusic() {
+        this.musicEnabled = !this.musicEnabled;
+        savePref(MUSIC_PREF_KEY, this.musicEnabled);
+        if (this.musicEnabled) this._resumeIfSuspended();
         if (this.ambienceNodes) {
-            this._setAmbienceTargetGain(this.enabled ? this._ambienceTargetLevel() : 0, 0.4);
+            this._setAmbienceTargetGain(this._ambienceTargetLevel(), 0.4);
         }
-        return this.enabled;
+        return this.musicEnabled;
+    }
+
+    // Kept so any older caller still works: flips BOTH channels together,
+    // driven by whether anything is currently audible.
+    toggle() {
+        const turningOn = !(this.sfxEnabled || this.musicEnabled);
+        this.sfxEnabled = turningOn;
+        this.musicEnabled = turningOn;
+        savePref(SFX_PREF_KEY, this.sfxEnabled);
+        savePref(MUSIC_PREF_KEY, this.musicEnabled);
+        if (turningOn) this._resumeIfSuspended();
+        if (this.ambienceNodes) {
+            this._setAmbienceTargetGain(this._ambienceTargetLevel(), 0.4);
+        }
+        return turningOn;
     }
 
     // Short tactile tick/click for tile select
     playClick() {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
         
@@ -66,7 +113,7 @@ class GameAudio {
 
     // Quick swoosh/slide sound for swaps
     playSwap() {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
         
@@ -94,7 +141,7 @@ class GameAudio {
 
     // Ascending arpeggio chime when words form
     playWordClear(wordLength = 2) {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
         
@@ -159,7 +206,7 @@ class GameAudio {
 
     // Exploding noise explosion with a bass drop for combos
     playCombo(streak = 2) {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
         
@@ -208,7 +255,7 @@ class GameAudio {
 
     // Alarm beep for high danger row warning
     playDangerWarning() {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
         
@@ -241,7 +288,7 @@ class GameAudio {
 
     // Satisfying sword slash sound (blade whoosh)
     playSlash() {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
         
@@ -285,7 +332,7 @@ class GameAudio {
 
     // Soft acoustic burst pop for word explosions
     playBurstPop() {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
 
@@ -313,7 +360,7 @@ class GameAudio {
 
     // Gentle bell chime for Hint powerup
     playHint() {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
 
@@ -344,7 +391,7 @@ class GameAudio {
 
     // Multi-pitch ascending chime for continuous swiping
     playSwipeStep(stepIndex = 0) {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
 
@@ -374,7 +421,7 @@ class GameAudio {
 
     // Triumphant Level Up Fanfare
     playLevelUp() {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
 
@@ -405,7 +452,7 @@ class GameAudio {
 
     // Descending sad chord for game over
     playGameOver() {
-        if (!this.enabled) return;
+        if (!this.sfxEnabled) return;
         this.init();
         if (!this.ctx) return;
         
@@ -481,7 +528,7 @@ class GameAudio {
     // pause state -- single source of truth so toggle()/duck/unduck don't
     // have to duplicate this logic.
     _ambienceTargetLevel() {
-        if (!this.enabled) return 0;
+        if (!this.musicEnabled) return 0;
         return this.ambienceDucked ? 0.12 : 1.0;
     }
 

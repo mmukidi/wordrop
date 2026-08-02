@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260802_0800">
+    <link rel="stylesheet" href="style.css?v=20260802_0900">
     <!-- Sentry Production Error Tracking SDK -->
     <script src="https://browser.sentry-cdn.com/7.114.0/bundle.min.js" crossorigin="anonymous"></script>
     <script>
@@ -47,7 +47,8 @@
             </div>
         </header>
 
-        <!-- Controls & Power-ups (Top Bar for Gamers) -->
+        <!-- Power-ups get their own full-width row so the labels are never
+             clipped (they were at 8 buttons; 9 made it worse). -->
         <div class="game-footer top-controls">
             <button id="btn-hint" class="powerup-btn hint-btn" title="Highlight a word (-10 pts)">
                 <div class="powerup-icon">💡</div>
@@ -64,11 +65,15 @@
                 <div class="powerup-icon">🔥</div>
                 <div class="powerup-label">VORTEX (-25)</div>
             </button>
+        </div>
 
+        <!-- Icon controls on their own compact row -->
+        <div class="icon-controls">
             <button id="btn-info" class="control-btn" title="How to Play & Tips">ℹ️</button>
             <button id="btn-stats" class="control-btn" title="Gamer Statistics">📊</button>
             <button id="btn-pause" class="control-btn" title="Pause Game">⏸️</button>
-            <button id="btn-sound" class="control-btn" title="Toggle Sound">🔊</button>
+            <button id="btn-music" class="control-btn" title="Toggle Music" aria-label="Toggle background music">🎵</button>
+            <button id="btn-sound" class="control-btn" title="Toggle Sound Effects" aria-label="Toggle sound effects">🔊</button>
             <button id="btn-restart" class="control-btn" title="Reset Game">🔄</button>
         </div>
 
@@ -168,7 +173,13 @@
                     <span class="label">GAME CENTER</span>
                     <span id="stats-game-center" class="value gc-status">—</span>
                 </div>
+                <div class="final-stat-item">
+                    <span class="label">HAPTICS</span>
+                    <span id="stats-haptics" class="value gc-status">—</span>
+                </div>
             </div>
+
+            <button id="btn-test-haptic" class="action-btn">📳 TEST HAPTIC</button>
             <button id="btn-close-stats" class="action-btn primary">CLOSE</button>
         </div>
     </div>
@@ -395,6 +406,6 @@
         </div>
     </div>
 
-    <script type="module" src="game.js?v=20260802_0800"></script>
+    <script type="module" src="game.js?v=20260802_0900"></script>
 </body>
 </html>
