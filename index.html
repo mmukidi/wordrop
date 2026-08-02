@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260802_0900">
+    <link rel="stylesheet" href="style.css?v=20260802_1000">
     <!-- Sentry Production Error Tracking SDK -->
     <script src="https://browser.sentry-cdn.com/7.114.0/bundle.min.js" crossorigin="anonymous"></script>
     <script>
@@ -31,10 +31,7 @@
     <div class="game-wrapper">
         <!-- Game Header -->
         <header class="game-header">
-            <div class="brand">
-                <h1 class="game-title">WORDROP BURST</h1>
-                <div class="level-indicator clickable" id="level-btn" title="Select Level (1-10)">LEVEL <span id="level-val">1</span> ▼</div>
-            </div>
+            <h1 class="game-title">WORDROP</h1>
             <div class="stats">
                 <div class="stat-box">
                     <span class="stat-label">SCORE</span>
@@ -77,41 +74,43 @@
             <button id="btn-restart" class="control-btn" title="Reset Game">🔄</button>
         </div>
 
-        <!-- Timer / Rise Bar with Digital Countdown -->
-        <div class="timer-container">
-            <div class="timer-label">NEXT RISE <span id="timer-countdown-val" class="timer-countdown">15s</span></div>
+        <!-- Unified HUD. Previously three separate strips (rise timer, goal,
+             last word) each with its own 8px label; merging them frees the
+             vertical space that pays for readable type and 44pt tap targets,
+             and gives the screen one obvious place to look. -->
+        <div id="goal-container" class="hud">
+            <div class="hud-row">
+                <button id="level-btn" class="level-chip" title="Change level">LEVEL <span id="level-val">1</span> ▾</button>
+                <span id="goal-label" class="goal-label">GOAL</span>
+                <span id="goal-value" class="goal-value">0 / 100</span>
+            </div>
+
+            <div class="goal-track">
+                <div id="goal-bar" class="goal-bar"></div>
+            </div>
+
+            <div class="hud-row hud-sub">
+                <span class="sub-item">NEXT RISE <span id="timer-countdown-val" class="timer-countdown">15s</span></span>
+                <span class="sub-item sub-last">LAST
+                    <span id="last-word-text" class="last-word-text">—</span>
+                    <span id="last-word-score" class="last-word-score"></span>
+                </span>
+            </div>
+
             <div class="timer-track">
                 <div id="timer-bar" class="timer-bar"></div>
             </div>
         </div>
 
-        <!-- Level Goal HUD — always visible, so the player knows what
-             they're working toward and how close they are. -->
-        <div id="goal-container" class="goal-container">
-            <div class="goal-head">
-                <span id="goal-label" class="goal-label">LEVEL 1 GOAL</span>
-                <span id="goal-value" class="goal-value">0 / 100</span>
-            </div>
-            <div class="goal-track">
-                <div id="goal-bar" class="goal-bar"></div>
-            </div>
-        </div>
-
-        <!-- Last Spelled Word HUD -->
-        <div class="last-word-container">
-            <span class="last-word-label">LAST WORD:</span>
-            <span id="last-word-text" class="last-word-text">—</span>
-            <span id="last-word-score" class="last-word-score"></span>
-        </div>
-
-        <!-- Notification Banner / Combo Indicator -->
-        <div class="notification-container">
-            <div id="combo-badge" class="combo-badge hidden">COMBO 2x!</div>
-            <div id="word-popup" class="word-popup hidden">CLEAR!</div>
-        </div>
-
         <!-- The Game Board Grid -->
         <main class="board-container">
+            <!-- Combo / word popups float OVER the board rather than
+                 reserving a permanently-empty 28px strip above it. -->
+            <div class="notification-container">
+                <div id="combo-badge" class="combo-badge hidden">COMBO 2x!</div>
+                <div id="word-popup" class="word-popup hidden">CLEAR!</div>
+            </div>
+
             <!-- Level 0 tutorial instruction, docked in the empty space at the
                  TOP of the board so it can never cover the tiles (which stack
                  upward from the bottom). -->
@@ -133,10 +132,10 @@
                         <div class="grid-backdrop"></div>
                     </div>
 
-                    <!-- Thick Solid Cyberpunk Floor Bar -->
-                    <div class="thick-floor-bar">
-                        <span class="floor-hazard-label">BASELINE</span>
-                    </div>
+                    <!-- Thick Solid Cyberpunk Floor Bar. The glowing bar
+                         reads as the floor on its own; the old 9px
+                         "BASELINE" caption was unreadable decoration. -->
+                    <div class="thick-floor-bar"></div>
                 </div>
             </div>
         </main>
@@ -406,6 +405,6 @@
         </div>
     </div>
 
-    <script type="module" src="game.js?v=20260802_0900"></script>
+    <script type="module" src="game.js?v=20260802_1000"></script>
 </body>
 </html>

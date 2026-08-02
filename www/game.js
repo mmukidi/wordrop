@@ -2821,8 +2821,11 @@ function renderGoalHUD() {
     const target = getLevelTarget(level);
     const pct = Math.max(0, Math.min(100, (levelScore / target) * 100));
     if (bar) bar.style.width = `${pct}%`;
-    if (label) label.textContent = `LEVEL ${level} GOAL`;
+    // The level now lives in its own chip (which is also the level-picker
+    // button), so the label is just the word GOAL and no longer repeats it.
+    if (label) label.textContent = "GOAL";
     if (value) value.textContent = `${Math.min(levelScore, target)} / ${target}`;
+    if (levelValEl) levelValEl.textContent = isDailyMode ? `${level}🔥` : level;
 
     // Visibly "hot" as the player closes in on the target.
     if (wrap.classList) wrap.classList.toggle("near-goal", pct >= 75 && pct < 100);
