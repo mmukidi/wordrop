@@ -406,49 +406,10 @@ function gcPlugin() {
     ) || null;
 }
 
-/* Game Center auth is deliberately invisible when it succeeds -- iOS shows
- * a "Welcome back" banner for ~2s and nothing else -- which makes a FAILURE
- * indistinguishable from a success you happened to blink through. Record the
- * outcome so the Stats screen can state it plainly.
- */
-let gcStatus = { state: "unavailable", playerName: "" };
-
 function gcAuthenticate() {
     const gc = gcPlugin();
-    if (!gc) {
-        gcStatus = { state: "unavailable", playerName: "" };
-        renderGameCenterStatus();
-        return;
-    }
-    gcStatus = { state: "checking", playerName: "" };
-    renderGameCenterStatus();
-
-    gc.authenticate()
-        .then(res => {
-            gcStatus = (res && res.isAuthenticated)
-                ? { state: "signedIn", playerName: res.playerName || "" }
-                : { state: "signedOut", playerName: "" };
-            renderGameCenterStatus();
-        })
-        .catch(err => {
-            console.warn("[GameCenter] authenticate failed:", err);
-            gcStatus = { state: "error", playerName: String(err && err.message ? err.message : err) };
-            renderGameCenterStatus();
-        });
-}
-
-function renderGameCenterStatus() {
-    const el = document.getElementById("stats-game-center");
-    if (!el) return;
-    const map = {
-        unavailable: "Not available on web",
-        checking: "Signing in…",
-        signedIn: gcStatus.playerName ? `✅ ${gcStatus.playerName}` : "✅ Signed in",
-        signedOut: "⚠️ Not signed in",
-        error: "⚠️ Sign-in failed"
-    };
-    el.textContent = map[gcStatus.state] || "—";
-    el.title = gcStatus.state === "error" ? gcStatus.playerName : "";
+    if (!gc) return;
+    gc.authenticate().catch(err => console.warn("[GameCenter] authenticate failed:", err));
 }
 
 function gcSubmitScore(value) {
@@ -2400,7 +2361,6 @@ function openStatsModal() {
     if (statsLongestWordEl) statsLongestWordEl.textContent = longestWordSpelled.toUpperCase();
     if (statsRareCountEl) statsRareCountEl.textContent = rareTilesClearedCount;
     if (statsHighScoreEl) statsHighScoreEl.textContent = formatScore(highScore);
-    renderGameCenterStatus();
     if (statsOverlay) statsOverlay.classList.remove("hidden");
 }
 

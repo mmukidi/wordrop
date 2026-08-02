@@ -948,17 +948,6 @@ body {
     color: #fff;
 }
 
-/* Game Center sign-in state — smaller, since it's a status not a number. */
-.final-stat-item .value.gc-status {
-    font-size: 12px;
-    font-weight: 800;
-    max-width: 60%;
-    text-align: right;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
 .action-btn {
     width: 100%;
     padding: 14px 20px;
