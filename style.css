@@ -1333,3 +1333,51 @@ body {
 .text-btn:hover {
     opacity: 1;
 }
+
+/* Level 0 Tutorial Hint Overlay (shown during gameplay) */
+.level0-hint {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 999;
+    animation: fadeIn 0.3s ease forwards;
+}
+
+.level0-hint.hidden {
+    display: none;
+}
+
+.hint-box {
+    background: radial-gradient(circle at center, #1e1e2d 0%, #0f0f14 100%);
+    border: 1.5px solid var(--neon-cyan);
+    box-shadow: 0 0 30px rgba(0, 240, 255, 0.3);
+    border-radius: 12px;
+    padding: 20px 24px;
+    max-width: 300px;
+    text-align: center;
+}
+
+.hint-title {
+    font-family: 'Outfit', sans-serif;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    color: var(--neon-cyan);
+    margin-bottom: 8px;
+}
+
+.hint-text {
+    font-size: 13px;
+    color: var(--text-light);
+    line-height: 1.5;
+    margin: 0;
+}
+
+/* Level 0 Tutorial Button in level-select modal */
+.level0-btn {
+    width: 100%;
+    border-color: var(--neon-cyan) !important;
+    box-shadow: 0 0 12px rgba(0, 240, 255, 0.5);
+    margin-bottom: 12px;
+}

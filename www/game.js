@@ -504,66 +504,80 @@ async function shareResultCard() {
     }
 }
 
-/* --- First-run tutorial ---
- * Three short steps overlaid on the (frozen) live board the first time
- * the game opens. Freezing works through the existing isPaused flag --
- * the rise timer already checks it every tick -- without showing the
- * pause overlay. Skippable, never shown again once dismissed.
+/* --- Level 0: Guided Tutorial Game Mode ---
+ * A real playable level (not an overlay) that teaches the core mechanics
+ * through gameplay. Board starts frozen, with guided hints at each step:
+ * 1. Swipe to spell (a pre-placed easy word)
+ * 2. Shuffle mechanic
+ * 3. Glow tile row/column burst
+ * 4. Rise unlocks, free play
+ * Shown once per device, skippable at any point.
  */
 
-const TUTORIAL_STEPS = [
-    {
-        title: "⬆️ THE BOARD RISES",
-        text: "New letter rows push everything up. If the stack reaches the top, it's game over — keep it low by clearing words!"
-    },
-    {
-        title: "👆 SWIPE TO SPELL",
-        text: "Drag across 3 or more letters in a straight line (row or column) to spell a word. Longer and rarer words score more — vertical words score 1.5x!"
-    },
-    {
-        title: "⚡ GLOW TILES",
-        text: "Orange Glow Tiles show a ⚡ number. Clear any word worth that much in the tile's row or column and the WHOLE line explodes for a huge bonus!"
-    }
+let isLevel0 = false;
+let level0Step = 0; // 0=intro, 1=swipe, 2=shuffle, 3=glow, 4=rise unlocked/free
+const LEVEL_0_STEPS = [
+    { title: "🎮 SWIPE TO SPELL", hint: "Drag across 3+ letters in a line to spell a word. Try: C-A-T" },
+    { title: "🔀 SHUFFLE", hint: "Tap SHUFFLE to rearrange tiles when you're stuck." },
+    { title: "⚡ GLOW TILES", hint: "This orange ⚡ tile bursts its entire row/column when you clear a word worth ⚡ points in it!" },
+    { title: "📈 RISE & SURVIVE", hint: "The board rises! Keep stacking tiles low by clearing words before they hit the top." }
 ];
-let tutorialStepIndex = 0;
 
-function maybeShowTutorial() {
-    if (localStorage.getItem("wordrop_tutorial_done")) return;
-    const overlay = document.getElementById("tutorial-overlay");
-    if (!overlay) return;
-    isPaused = true; // freeze the rise silently (no pause overlay)
-    tutorialStepIndex = 0;
-    renderTutorialStep();
-    overlay.classList.remove("hidden");
+function startLevel0() {
+    if (localStorage.getItem("wordrop_level0_done")) {
+        // Already completed tutorial, start a normal Level 1 instead
+        selectLevel(1);
+        return;
+    }
+    isLevel0 = true;
+    level0Step = 0;
+    level = 1;
+    levelValEl.textContent = "🎓";
+    startGame();
+    showLevel0Hint();
 }
 
-function renderTutorialStep() {
-    const step = TUTORIAL_STEPS[tutorialStepIndex];
-    const titleEl = document.getElementById("tutorial-title");
-    const textEl = document.getElementById("tutorial-text");
-    const nextBtn = document.getElementById("btn-tutorial-next");
-    const dotsEl = document.getElementById("tutorial-dots");
+function showLevel0Hint() {
+    const step = LEVEL_0_STEPS[level0Step];
+    const hintEl = document.getElementById("level0-hint");
+    if (!hintEl) return;
+    const titleEl = hintEl.querySelector(".hint-title");
+    const textEl = hintEl.querySelector(".hint-text");
     if (titleEl) titleEl.textContent = step.title;
-    if (textEl) textEl.textContent = step.text;
-    if (nextBtn) nextBtn.textContent = tutorialStepIndex === TUTORIAL_STEPS.length - 1 ? "LET'S PLAY!" : "NEXT";
-    if (dotsEl) dotsEl.textContent = TUTORIAL_STEPS.map((_, i) => i === tutorialStepIndex ? "●" : "○").join(" ");
+    if (textEl) textEl.textContent = step.hint;
+    hintEl.classList.remove("hidden");
 }
 
-function advanceTutorial() {
-    audio.playClick();
-    if (tutorialStepIndex < TUTORIAL_STEPS.length - 1) {
-        tutorialStepIndex++;
-        renderTutorialStep();
+function hideLevel0Hint() {
+    const hintEl = document.getElementById("level0-hint");
+    if (hintEl) hintEl.classList.add("hidden");
+}
+
+function advanceLevel0Step() {
+    level0Step++;
+    if (level0Step < LEVEL_0_STEPS.length) {
+        showLevel0Hint();
     } else {
-        dismissTutorial();
+        // Tutorial complete
+        localStorage.setItem("wordrop_level0_done", "1");
+        hideLevel0Hint();
     }
 }
 
-function dismissTutorial() {
-    localStorage.setItem("wordrop_tutorial_done", "1");
-    const overlay = document.getElementById("tutorial-overlay");
-    if (overlay) overlay.classList.add("hidden");
-    isPaused = false; // unfreeze the rise
+function presetLevel0BoardStep1() {
+    // Step 1: place C-A-T horizontally in row 3 so swipe demo works
+    // Leave rest random
+    if (level0Step !== 0) return;
+    spawnTile(0, 3, "C");
+    spawnTile(1, 3, "A");
+    spawnTile(2, 3, "T");
+}
+
+function presetLevel0BoardStep3() {
+    // Step 3: spawn a glow tile in row 2 so they can see the burst
+    if (level0Step !== 2) return;
+    const glowValue = rollGlowThreshold();
+    spawnTile(3, 2, null, true, glowValue);
 }
 
 /* --- Initialization --- */
@@ -615,11 +629,12 @@ async function initGame() {
     // and is a total no-op on the website build (see gcPlugin()).
     gcAuthenticate();
 
-    // Start Game
-    startGame();
-
-    // First launch only: freeze the board and walk through 3 quick steps.
-    maybeShowTutorial();
+    // Start Game (Level 0 if never tutorialized before, else Level 1)
+    if (!localStorage.getItem("wordrop_level0_done")) {
+        startLevel0();
+    } else {
+        startGame();
+    }
 }
 
 if (document.readyState === "loading") {
@@ -729,7 +744,7 @@ function setupEventListeners() {
         });
     });
 
-    // Tier-1 retention features (daily / share / tutorial)
+    // Tier-1 retention features (daily / share / level0)
     const btnDaily = document.getElementById("btn-daily");
     if (btnDaily) btnDaily.addEventListener("click", () => {
         audio.playClick();
@@ -741,12 +756,11 @@ function setupEventListeners() {
         audio.playClick();
         shareResultCard();
     });
-    const btnTutorialNext = document.getElementById("btn-tutorial-next");
-    if (btnTutorialNext) btnTutorialNext.addEventListener("click", advanceTutorial);
-    const btnTutorialSkip = document.getElementById("btn-tutorial-skip");
-    if (btnTutorialSkip) btnTutorialSkip.addEventListener("click", () => {
+    const btnLevel0 = document.getElementById("btn-level0");
+    if (btnLevel0) btnLevel0.addEventListener("click", () => {
         audio.playClick();
-        dismissTutorial();
+        closeLevelSelectModal();
+        startLevel0();
     });
 
     btnShuffle.addEventListener("click", triggerShuffle);
@@ -853,7 +867,10 @@ function startGame() {
 
     // Reset scores & states
     score = 0;
-    level = isDailyMode ? DAILY_START_LEVEL : 1;
+    // Level 0 sets level before calling startGame; don't override it
+    if (!isLevel0) {
+        level = isDailyMode ? DAILY_START_LEVEL : 1;
+    }
     wordsClearedCount = 0;
     longestWordSpelled = "—";
     isPlaying = true;
@@ -902,6 +919,12 @@ function startGame() {
         }
     }
 
+    // Level 0 tutorial: place specific tiles for teaching each step
+    if (isLevel0) {
+        presetLevel0BoardStep1();
+        presetLevel0BoardStep3();
+    }
+
     // Safety Verification Check: If 0 tiles exist, force emergency spawn
     const createdTiles = (container || boardEl).querySelectorAll(".tile");
     if (createdTiles.length === 0) {
@@ -916,8 +939,10 @@ function startGame() {
     // Resolve any starting words immediately without scoring
     resolveInitialMatches();
 
-    // Start Rise Timer
-    startRiseTimer();
+    // Start Rise Timer (Level 0 only starts after step 3)
+    if (!isLevel0 || level0Step >= 3) {
+        startRiseTimer();
+    }
 
     // Soft looping water/wind/forest ambience -- see audio.js. Started
     // here (a real user gesture already happened to reach startGame(),
@@ -1522,6 +1547,14 @@ function triggerRowColumnBurst(glowTile, direction) {
     audio.playSlash();
     audio.playBurstPop();
     hapticImpact("Heavy"); // the big payoff moment deserves the big thump
+
+    // Level 0 Step 3: Glow burst triggered → advance to free play
+    if (isLevel0 && level0Step === 2) {
+        advanceLevel0Step();
+        // Unlock the rise now
+        isPaused = false;
+        startRiseTimer();
+    }
 }
 
 async function sliceClearWord(match) {
@@ -1601,6 +1634,11 @@ async function sliceClearWord(match) {
     }
 
     gcRecordWordCleared(scoreResult.word);
+
+    // Level 0 Step 1: First word cleared → advance to shuffle step
+    if (isLevel0 && level0Step === 0) {
+        advanceLevel0Step();
+    }
 
     // Update Last Spelled Word HUD
     lastWordTextEl.textContent = scoreResult.word.toUpperCase();
@@ -2242,6 +2280,12 @@ function triggerGameOver() {
     hapticNotification("Error");
     audio.stopAmbience();
     boardEl.classList.remove("danger");
+
+    // Level 0: mark as complete on game over (even if not all steps finished)
+    if (isLevel0) {
+        localStorage.setItem("wordrop_level0_done", "1");
+        hideLevel0Hint();
+    }
 
     // Display overlay stats
     finalScoreEl.textContent = score.toLocaleString();

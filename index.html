@@ -199,6 +199,8 @@
         <div class="overlay-content level-select-content">
             <h2>🎯 SELECT LEVEL</h2>
 
+            <button id="btn-level0" class="action-btn level0-btn">🎓 TUTORIAL (Learn to Play)</button>
+
             <div class="daily-section">
                 <button id="btn-daily" class="action-btn daily-btn">🔥 TODAY'S DAILY CHALLENGE</button>
                 <p id="daily-status" class="daily-status"></p>
@@ -290,14 +292,11 @@
         </div>
     </div>
 
-    <!-- First-Run Tutorial Overlay (3 steps, shown once) -->
-    <div id="tutorial-overlay" class="overlay hidden">
-        <div class="overlay-content tutorial-content">
-            <h2 id="tutorial-title"></h2>
-            <p id="tutorial-text"></p>
-            <p id="tutorial-dots" class="tutorial-dots"></p>
-            <button id="btn-tutorial-next" class="action-btn primary">NEXT</button>
-            <button id="btn-tutorial-skip" class="text-btn">Skip tutorial</button>
+    <!-- Level 0 Tutorial Hint Overlay (shown during gameplay) -->
+    <div id="level0-hint" class="level0-hint hidden">
+        <div class="hint-box">
+            <h3 class="hint-title"></h3>
+            <p class="hint-text"></p>
         </div>
     </div>
 
