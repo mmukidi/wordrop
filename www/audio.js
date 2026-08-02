@@ -8,6 +8,8 @@ class GameAudio {
     constructor() {
         this.ctx = null;
         this.enabled = true;
+        this.ambienceNodes = null;   // set once startAmbience() builds the graph
+        this.ambienceDucked = false; // true while paused
     }
 
     init() {
@@ -23,6 +25,13 @@ class GameAudio {
         this.enabled = !this.enabled;
         if (this.enabled && this.ctx && this.ctx.state === "suspended") {
             this.ctx.resume();
+        }
+        // The mute/unmute button also covers the ambient background music,
+        // not just one-shot SFX -- mute by ramping the ambience's own
+        // master gain rather than tearing down/rebuilding the whole node
+        // graph, so unmuting resumes instantly with no click or restart.
+        if (this.ambienceNodes) {
+            this._setAmbienceTargetGain(this.enabled ? this._ambienceTargetLevel() : 0, 0.4);
         }
         return this.enabled;
     }
@@ -424,6 +433,161 @@ class GameAudio {
         } catch (e) {
             console.error("Audio error:", e);
         }
+    }
+
+    // ====================================================================
+    // Ambient background music -- real produced tracks (bundled audio
+    // files), not synthesis. Layers cleanly under the SFX above using the
+    // same Web Audio graph (a single master GainNode). Independent
+    // play/pause/stop lifecycle from the one-shot SFX methods, but shares
+    // the same enabled/mute toggle (see toggle() above) and the game's
+    // own pause state (see duckAmbience()/unduckAmbience(), called from
+    // togglePause() in game.js).
+    //
+    // Design history (kept because the failure modes are informative):
+    // v1 layered a synthesized wind bed (noise with its filter cutoff
+    // swept by an LFO) and a static 3-tone pad drone -- sweeping a
+    // resonant filter on noise is what tuning an AM radio dial sounds
+    // like, and a pure tone under continuous noise reads as a carrier
+    // signal in static. Removed for sounding like "radio noise". v2
+    // replaced it with synthesized WHITE noise through a bandpass filter
+    // for "rain hiss" -- but white noise (flat energy across all
+    // frequencies) is *literally* what dead-channel/TV static is made
+    // of, so of course it read as "television no channel frequency
+    // sound". v3 used synthesized PINK noise instead (soft, rolled-off
+    // spectrum) with scattered noise-burst droplets and a generative
+    // piano layer -- an improvement, but still procedurally synthesized
+    // and not what the user actually wanted. v4 made the water drops
+    // rhythmic and pitched rather than randomly scattered. v5 (this
+    // version) drops the synthesis approach entirely in favor of real
+    // produced music: two original AI-generated (Suno) tracks the user
+    // made from a "soothing water + piano" prompt, bundled as local
+    // assets and alternated between plays for variety across a longer
+    // session -- see AMBIENCE_TRACKS below.
+    // ====================================================================
+
+    // Local, bundled tracks (see assets/audio/) -- both are original
+    // AI-generated (Suno) compositions the user produced themselves for
+    // this game, not third-party copyrighted material. One is picked at
+    // random each time a track starts, and a new one is picked again
+    // each time the current one finishes, so a long session hears both
+    // in a random order rather than one track looping in isolation.
+    static AMBIENCE_TRACKS = [
+        "assets/audio/rainstone-loop-1.mp3",
+        "assets/audio/rainstone-loop-2.mp3"
+    ];
+
+    // The volume ambience should be sitting at right now, given mute and
+    // pause state -- single source of truth so toggle()/duck/unduck don't
+    // have to duplicate this logic.
+    _ambienceTargetLevel() {
+        if (!this.enabled) return 0;
+        return this.ambienceDucked ? 0.12 : 1.0;
+    }
+
+    _setAmbienceTargetGain(level, rampSeconds) {
+        if (!this.ambienceNodes || !this.ctx) return;
+        const now = this.ctx.currentTime;
+        const g = this.ambienceNodes.master.gain;
+        g.cancelScheduledValues(now);
+        g.setValueAtTime(g.value, now);
+        g.linearRampToValueAtTime(level, now + rampSeconds);
+    }
+
+    // Fetches + decodes a track once and caches the decoded AudioBuffer
+    // (decodeAudioData is the slow part -- fetch is a fast local asset
+    // read, but decoding a multi-minute mp3 isn't instant) so replays
+    // later in the session don't re-decode.
+    async _loadTrackBuffer(url) {
+        if (!this._trackBufferCache) this._trackBufferCache = {};
+        if (this._trackBufferCache[url]) return this._trackBufferCache[url];
+        const res = await fetch(url);
+        const arrayBuf = await res.arrayBuffer();
+        const audioBuf = await this.ctx.decodeAudioData(arrayBuf);
+        this._trackBufferCache[url] = audioBuf;
+        return audioBuf;
+    }
+
+    // Picks a random track, loads it, and plays it once through the
+    // ambience master gain -- then, when it naturally finishes, picks
+    // another random track and repeats, so playback continues
+    // indefinitely alternating between the two. This is async (fetch +
+    // decode take real time), so it always re-checks that this.ambienceNodes
+    // is still the SAME graph it started with before touching anything --
+    // stopAmbience() or a fresh startAmbience() may have run while a
+    // track was loading, in which case this bails out rather than
+    // starting playback into a stale/torn-down graph.
+    async _playNextAmbienceTrack() {
+        if (!this.ambienceNodes || !this.ctx) return;
+        const nodes = this.ambienceNodes;
+        try {
+            const url = GameAudio.AMBIENCE_TRACKS[Math.floor(Math.random() * GameAudio.AMBIENCE_TRACKS.length)];
+            const buffer = await this._loadTrackBuffer(url);
+            if (this.ambienceNodes !== nodes) return; // stale -- stopped/restarted while loading
+            const source = this.ctx.createBufferSource();
+            source.buffer = buffer;
+            source.connect(nodes.master);
+            source.onended = () => {
+                // Fires both on natural end-of-track AND on an explicit
+                // stop() call -- only chain into the next track for the
+                // former (checked via the same staleness guard above).
+                if (this.ambienceNodes === nodes) this._playNextAmbienceTrack();
+            };
+            source.start();
+            nodes.sources = [source];
+        } catch (e) {
+            console.error("Ambience audio error:", e);
+        }
+    }
+
+    startAmbience() {
+        if (this.ambienceNodes) return; // already running -- idempotent
+        this.init();
+        if (!this.ctx) return;
+
+        try {
+            const ctx = this.ctx;
+            const master = ctx.createGain();
+            master.gain.setValueAtTime(0.0, ctx.currentTime);
+            master.connect(ctx.destination);
+
+            this.ambienceNodes = { master, sources: [] };
+            this.ambienceDucked = false;
+            this._setAmbienceTargetGain(this._ambienceTargetLevel(), 3.0); // slow fade-in
+            this._playNextAmbienceTrack(); // kick off track playback (async: fetch + decode)
+        } catch (e) {
+            console.error("Ambience audio error:", e);
+        }
+    }
+
+    stopAmbience() {
+        if (!this.ambienceNodes || !this.ctx) return;
+        const nodes = this.ambienceNodes;
+        this.ambienceNodes = null; // idempotent immediately, even before the fade finishes -- also what _playNextAmbienceTrack() checks to stop chaining
+        try {
+            const now = this.ctx.currentTime;
+            nodes.master.gain.cancelScheduledValues(now);
+            nodes.master.gain.setValueAtTime(nodes.master.gain.value, now);
+            nodes.master.gain.linearRampToValueAtTime(0.0, now + 1.2);
+            setTimeout(() => {
+                nodes.sources.forEach(n => { try { n.stop(); } catch (e) { /* already stopped, or hadn't started loading yet */ } });
+            }, 1300);
+        } catch (e) {
+            console.error("Ambience stop error:", e);
+        }
+    }
+
+    // Called when the game is paused/resumed (see togglePause() in
+    // game.js) -- ducks the ambience to a faint background level rather
+    // than stopping it outright, so resuming feels seamless.
+    duckAmbience() {
+        this.ambienceDucked = true;
+        this._setAmbienceTargetGain(this._ambienceTargetLevel(), 0.6);
+    }
+
+    unduckAmbience() {
+        this.ambienceDucked = false;
+        this._setAmbienceTargetGain(this._ambienceTargetLevel(), 0.6);
     }
 }
 

@@ -190,6 +190,67 @@ deriving `direction` from the swipe path's own first two tiles right
 before calling `sliceClearWord()` (the path is already locked to one axis
 during swiping, so this is always correct, not a guess).
 
+A third issue reported the same day, after the `direction` fix above had
+already shipped and been rebuilt on device ("the striped tile still isn't
+bursting"), turned out to be a balance problem wearing a bug's clothes, plus
+one genuinely uncovered (and fixed) correctness gap:
+
+- **Balance, not a bug.** `rollGlowThreshold()`'s original range (5 + a
+  random 0-5 + level/3, i.e. 5-10 at level 1) meant even a word that *was*
+  swiped through a Glow Tile's row/column only met the threshold ~55% of
+  the time in Monte Carlo simulation against `calculateWordScore()` with
+  common 3-4 letter words — a coin flip reads as "broken" to a player who
+  doesn't know a threshold is being checked at all. Rebalanced to a much
+  lower, mostly-deterministic `3 + floor(level / 4)`, which simulation
+  confirmed clears virtually every real word at low levels (100% at level 1)
+  while staying gently harder at high levels (~85% at level 10) — see the
+  Monte Carlo script referenced from the commit, not reproduced here since
+  it's throwaway analysis, not a regression test.
+- **A real, separate correctness check that WAS worth writing down**:
+  before rebalancing, a slow/realistic-timing jsdom swipe (real per-step
+  `await delay()` between touch events, not synchronous dispatch, plus a
+  variant that deliberately let a `pushGridUp` rise cycle fire mid-swipe)
+  was used to rule out a timing/race explanation. A forced high-value word
+  ("example", score in the 50s, guaranteed to clear any level-1 threshold)
+  burst correctly under realistic timing when not racing the board-lock
+  window, confirming the core mechanism itself was never broken — only the
+  threshold math made it feel that way in casual play.
+
+## Tile rarity & Glow Tile color reference
+
+Redesigned 2026-07-31 after user feedback that the original 3-tier rarity
+system (blue/purple/gold) made the Glow Tile's first color scheme (orange)
+too easily confused with the gold "rare" tier. Each distinct letter point
+value in `TILE_VALUES` now gets its own name and color (`RARITY_TIERS` in
+`game.js`, mirrored in `style.css` CSS custom properties) on a low-to-high
+"heat" gradient:
+
+| Tier | Point value | Letters | Color | Hex |
+|---|---|---|---|---|
+| Common | 1 | A, E, I, N, O, R, S, T, U | Blue | `#3b82f6` |
+| Uncommon | 2 | D, G, L, M | Green | `#22c55e` |
+| Scarce | 3 | B, C, H, P | Purple | `#a855f7` |
+| Rare | 4 | F, V, W, Y | Pink | `#ec4899` |
+| Epic | 6 | J, K | Burning orange | `#f97316` |
+| Mythic | 8 | X | Red | `#ef4444` |
+| Legendary | 9 | Q, Z | Gold | `#eab308` |
+
+Epic, Mythic, and Legendary additionally pulse (`tierPulse` keyframe in
+`style.css`) so the rarest letters still read as visually special, not
+just differently colored — this is a continuation of what the old single
+"rare" tier's `goldPulse` animation did, generalized to 3 tiers via CSS
+custom properties instead of 3 near-duplicate `@keyframes` blocks.
+
+**Glow Tile** (the special mechanic, not a letter rarity — any letter of
+any rarity can spawn as a Glow Tile) deliberately reuses the same burning
+orange as the Epic tier per explicit design direction, rather than a
+separate hue. An earlier version used a cyan/magenta diagonal-stripe
+pattern specifically to avoid any color overlap with rarities, but that
+didn't read well visually and was reverted. What differentiates a Glow
+Tile from a plain Epic (6pt) letter tile now: a dashed border (rarities
+all use solid borders), the ⚡ burst-threshold badge in the corner, and a
+faster/hotter pulse (1.1s vs Epic's 2s).
+
 ## Sync direction
 
 The App Store build (`ios/App/App/public/`) is the source of truth once
@@ -198,3 +259,28 @@ around. Before starting new work, diff root, `www/`, and
 `ios/App/App/public/` to confirm they agree. After any change, propagate
 identically to all three and re-diff to confirm zero drift before calling
 it done.
+
+## 8. Tier-1 retention features (2026-08-01)
+
+Five features shipped together (see `GAP_ANALYSIS.md` for the why): haptics,
+first-run tutorial, shareable result card, daily challenge + streaks, and
+streak-reminder local notifications. All verified by
+`browser_test/features_test.js` (32 checks) — real game.js/index.html in
+jsdom with a mock `window.Capacitor` recording every native call. Key
+covered behaviors: tutorial shows once / freezes the rise / persists
+dismissal; two independent sessions deal the identical date-seeded daily
+board (mulberry32 over a djb2 date hash) while normal games differ; replay
+of today's daily deals the same board; streak extends on consecutive days,
+never double-counts same-day; reminder notification (id 1001) scheduled for
+tomorrow 18:00 local with permission requested only after a finished run;
+share text includes name/score/longest-word emoji strip/streak; word-clear
+fires Light/Medium impact, glow burst Heavy, game over Error. Gameplay
+randomness (letters + glow spawns) routes through `gameRand()` so daily
+seeding can't affect visual-only randomness or vice versa. The extraction
+harnesses (`gc_verify/run_tests*.js`) gained no-op stubs for the new free
+variables (`isDailyMode`, `hapticImpact`, `hapticNotification`, `gameRand`).
+
+Native-side caveat (not coverable in jsdom): the three Capacitor plugins
+(@capacitor/haptics, @capacitor/share, @capacitor/local-notifications) need
+`npx cap sync ios` run on the Mac (CocoaPods) before the Xcode build picks
+them up; until then every native call is a guarded no-op by design.

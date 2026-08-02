@@ -84,5 +84,16 @@ below is intentionally deferred, roughly in priority order.
 
 - High score, 10-level difficulty curve, combo/length/direction score
   multipliers, in-run stats (words cleared, longest word, rare count), hint
-  / shuffle / vortex power-ups, and — as of this session — Game Center
-  leaderboard + achievements.
+  / shuffle / vortex power-ups, Game Center leaderboard + achievements,
+  Glow Tiles (see `TESTING.md` for the full history), a 7-tier letter
+  rarity color system, and an ambient soundtrack. The soundtrack went
+  through 4 procedurally-synthesized iterations (wind+pad-drone → sounded
+  like radio static; white-noise rain hiss → sounded like TV static;
+  pink-noise hiss with scattered droplets; rhythmic pitched water-drop
+  pulses) before landing on what actually shipped: two original
+  AI-generated (Suno) tracks the user produced from a "soothing water +
+  piano, rhythmic" prompt, bundled as local assets
+  (`assets/audio/rainstone-loop-1.mp3` / `-2.mp3`, ~6MB/11MB) and
+  alternated randomly between plays — see `AMBIENCE_TRACKS` /
+  `_playNextAmbienceTrack()` in `audio.js`. All the synthesis code was
+  removed once the real tracks landed.

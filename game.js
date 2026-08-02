@@ -35,6 +35,27 @@ const TILE_VALUES = {
     N:1, O:1, P:3, Q:9, R:1, S:1, T:1, U:1, V:4, W:4, X:8, Y:4, Z:9
 };
 
+// Letter rarity tiers, redesigned 2026-07-31 -- one distinct color per
+// point value actually present in TILE_VALUES (1,2,3,4,6,8,9; 5 and 7
+// never occur), instead of the original 3 broad buckets. A low-to-high
+// "heat" gradient (cool blue = common, hot gold = legendary) so every
+// tier reads as visually distinct at a glance. Full table documented in
+// TESTING.md. getRarityClass()/getRarityColor() below both derive from
+// this single source of truth -- update colors/names here only.
+const RARITY_TIERS = [
+    { minValue: 9, name: "Legendary", cssClass: "tile-legendary", color: "#eab308" },
+    { minValue: 8, name: "Mythic",    cssClass: "tile-mythic",    color: "#ef4444" },
+    { minValue: 6, name: "Epic",      cssClass: "tile-epic",      color: "#f97316" },
+    { minValue: 4, name: "Rare",      cssClass: "tile-rare",      color: "#ec4899" },
+    { minValue: 3, name: "Scarce",    cssClass: "tile-scarce",    color: "#a855f7" },
+    { minValue: 2, name: "Uncommon",  cssClass: "tile-uncommon",  color: "#22c55e" },
+    { minValue: 1, name: "Common",    cssClass: "tile-common",    color: "#3b82f6" }
+];
+
+function getRarityTier(value) {
+    return RARITY_TIERS.find(t => value >= t.minValue) || RARITY_TIERS[RARITY_TIERS.length - 1];
+}
+
 // Game Center leaderboard/achievement IDs — must match what's configured
 // in App Store Connect exactly (see GAME_CENTER_SETUP.md).
 const GC_LEADERBOARD_HIGH_SCORE = "wordrop_high_score";
@@ -281,6 +302,270 @@ function gcRecordWordCleared(word) {
     }
 }
 
+/* --- Native plugin helpers (Haptics / Share / LocalNotifications) ---
+ * Same philosophy as Game Center above: bonus layers, never dependencies.
+ * Each is a safe no-op on the website build or if the plugin is missing.
+ */
+
+function capPlugin(name) {
+    return (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins[name]) || null;
+}
+
+function hapticImpact(style) { // "Light" | "Medium" | "Heavy"
+    const h = capPlugin("Haptics");
+    if (!h || !h.impact) return;
+    h.impact({ style }).catch(() => {});
+}
+
+function hapticNotification(type) { // "Success" | "Warning" | "Error"
+    const h = capPlugin("Haptics");
+    if (!h || !h.notification) return;
+    h.notification({ type }).catch(() => {});
+}
+
+/* --- Daily Challenge + streaks ---
+ * One seeded board per calendar day, same for every player: all
+ * gameplay-affecting randomness (letter draws + glow-tile spawn rolls)
+ * goes through gameRand(), which swaps Math.random for a date-seeded
+ * deterministic PRNG in daily mode. Purely-visual randomness (particle
+ * angles, shuffle animation) deliberately stays on Math.random so it
+ * can't perturb the seeded stream. The spawn stream's consumption order
+ * depends only on rise cycles, not player choices, so two players on the
+ * same date see the same letters arrive in the same order.
+ */
+
+let isDailyMode = false;
+let dailyRng = null;
+const DAILY_START_LEVEL = 2; // everyone starts the daily at the same speed
+
+function localDateKey(d = new Date()) {
+    // LOCAL date, not UTC -- "today's puzzle" should roll over at the
+    // player's midnight, like Wordle, not at UTC midnight.
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function yesterdayKey() {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return localDateKey(d);
+}
+
+// Small, well-known seeded PRNG (mulberry32) -- deterministic, fast, and
+// plenty good for letter draws (this is game fairness, not cryptography).
+function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+        a |= 0; a = (a + 0x6D2B79F5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function dailySeedForDate(dateKey) {
+    // Simple string hash (djb2) of the date -- every device hashes
+    // "2026-08-01" to the same 32-bit seed with no server involved.
+    let h = 5381;
+    for (let i = 0; i < dateKey.length; i++) {
+        h = ((h << 5) + h + dateKey.charCodeAt(i)) | 0;
+    }
+    return h >>> 0;
+}
+
+function gameRand() {
+    return (isDailyMode && dailyRng) ? dailyRng() : Math.random();
+}
+
+function getDailyStreak() {
+    return parseInt(localStorage.getItem("wordrop_daily_streak")) || 0;
+}
+
+function hasPlayedDailyToday() {
+    return localStorage.getItem("wordrop_daily_last_played") === localDateKey();
+}
+
+function getDailyBestToday() {
+    if (localStorage.getItem("wordrop_daily_best_date") !== localDateKey()) return 0;
+    return parseInt(localStorage.getItem("wordrop_daily_best_score")) || 0;
+}
+
+// Called once per finished daily run (from triggerGameOver). Counts the
+// streak at most once per day: consecutive-day play extends it, a gap
+// resets it to 1. Replays the same day just update the daily best score.
+function recordDailyRunFinished(finalScore) {
+    const today = localDateKey();
+    const last = localStorage.getItem("wordrop_daily_last_played");
+
+    if (last !== today) {
+        const newStreak = (last === yesterdayKey()) ? getDailyStreak() + 1 : 1;
+        localStorage.setItem("wordrop_daily_streak", newStreak);
+        localStorage.setItem("wordrop_daily_last_played", today);
+    }
+
+    if (localStorage.getItem("wordrop_daily_best_date") !== today) {
+        localStorage.setItem("wordrop_daily_best_date", today);
+        localStorage.setItem("wordrop_daily_best_score", finalScore);
+    } else if (finalScore > getDailyBestToday()) {
+        localStorage.setItem("wordrop_daily_best_score", finalScore);
+    }
+
+    scheduleStreakReminder(getDailyStreak());
+    return { streak: getDailyStreak(), best: getDailyBestToday() };
+}
+
+function startDailyChallenge() {
+    isDailyMode = true;
+    startGame(); // startGame() re-seeds dailyRng itself (so replays get the identical board)
+    showWordClearPopup("🔥 DAILY CHALLENGE!", { el: boardEl });
+}
+
+/* --- Local notifications (streak reminders) ---
+ * Scheduled AFTER a daily run finishes -- the permission prompt appears
+ * in a moment of positive engagement (just finished playing), not as an
+ * ambush at first launch. One pending notification, id 1001, replaced
+ * each time it's rescheduled: tomorrow evening, "your streak is at risk."
+ */
+const STREAK_REMINDER_ID = 1001;
+
+async function scheduleStreakReminder(streak) {
+    const ln = capPlugin("LocalNotifications");
+    if (!ln) return;
+    try {
+        const perm = await ln.requestPermissions();
+        if (!perm || perm.display !== "granted") return;
+        await ln.cancel({ notifications: [{ id: STREAK_REMINDER_ID }] }).catch(() => {});
+        const at = new Date();
+        at.setDate(at.getDate() + 1);
+        at.setHours(18, 0, 0, 0); // tomorrow 6pm local
+        await ln.schedule({
+            notifications: [{
+                id: STREAK_REMINDER_ID,
+                title: streak > 1 ? `🔥 ${streak}-day streak at risk!` : "🔥 Today's Daily Challenge is ready",
+                body: streak > 1
+                    ? "Play today's Daily Challenge to keep your streak alive."
+                    : "A fresh board is waiting. Can you beat yesterday's score?",
+                schedule: { at }
+            }]
+        });
+    } catch (e) {
+        console.warn("[Notifications] schedule failed:", e);
+    }
+}
+
+/* --- Shareable result card ---
+ * Wordle-style: compact, spoiler-free, braggable text with an emoji
+ * strip encoding the longest word's letter rarities. Native share sheet
+ * via the Capacitor Share plugin -> Web Share API -> clipboard fallback.
+ */
+
+function rarityEmojiForValue(v) {
+    if (v >= 8) return "🟨";
+    if (v >= 6) return "🟧";
+    if (v >= 4) return "🟥";
+    if (v >= 3) return "🟪";
+    if (v >= 2) return "🟩";
+    return "🟦";
+}
+
+function buildShareText() {
+    const lines = ["🔤 WORDROP BURST"];
+    if (isDailyMode) {
+        lines.push(`📅 Daily Challenge ${localDateKey()}`);
+    }
+    lines.push(`🏆 ${score.toLocaleString()} pts · Lvl ${level} · ${wordsClearedCount} words`);
+    if (longestWordSpelled && longestWordSpelled !== "—") {
+        const strip = longestWordSpelled.toUpperCase().split("")
+            .map(ch => rarityEmojiForValue(TILE_VALUES[ch] || 1)).join("");
+        lines.push(`📖 ${longestWordSpelled.toUpperCase()}`);
+        lines.push(strip);
+    }
+    const streak = getDailyStreak();
+    if (streak > 1) lines.push(`🔥 ${streak}-day streak`);
+    return lines.join("\n");
+}
+
+async function shareResultCard() {
+    const text = buildShareText();
+    const sharePlugin = capPlugin("Share");
+    try {
+        if (sharePlugin && sharePlugin.share) {
+            await sharePlugin.share({ text });
+            return;
+        }
+        if (navigator.share) {
+            await navigator.share({ text });
+            return;
+        }
+        await navigator.clipboard.writeText(text);
+        showWordClearPopup("COPIED TO CLIPBOARD!", { el: boardEl });
+    } catch (e) {
+        // AbortError = user closed the share sheet -- not an error.
+        if (e && e.name !== "AbortError") console.warn("[Share] failed:", e);
+    }
+}
+
+/* --- First-run tutorial ---
+ * Three short steps overlaid on the (frozen) live board the first time
+ * the game opens. Freezing works through the existing isPaused flag --
+ * the rise timer already checks it every tick -- without showing the
+ * pause overlay. Skippable, never shown again once dismissed.
+ */
+
+const TUTORIAL_STEPS = [
+    {
+        title: "⬆️ THE BOARD RISES",
+        text: "New letter rows push everything up. If the stack reaches the top, it's game over — keep it low by clearing words!"
+    },
+    {
+        title: "👆 SWIPE TO SPELL",
+        text: "Drag across 3 or more letters in a straight line (row or column) to spell a word. Longer and rarer words score more — vertical words score 1.5x!"
+    },
+    {
+        title: "⚡ GLOW TILES",
+        text: "Orange Glow Tiles show a ⚡ number. Clear any word worth that much in the tile's row or column and the WHOLE line explodes for a huge bonus!"
+    }
+];
+let tutorialStepIndex = 0;
+
+function maybeShowTutorial() {
+    if (localStorage.getItem("wordrop_tutorial_done")) return;
+    const overlay = document.getElementById("tutorial-overlay");
+    if (!overlay) return;
+    isPaused = true; // freeze the rise silently (no pause overlay)
+    tutorialStepIndex = 0;
+    renderTutorialStep();
+    overlay.classList.remove("hidden");
+}
+
+function renderTutorialStep() {
+    const step = TUTORIAL_STEPS[tutorialStepIndex];
+    const titleEl = document.getElementById("tutorial-title");
+    const textEl = document.getElementById("tutorial-text");
+    const nextBtn = document.getElementById("btn-tutorial-next");
+    const dotsEl = document.getElementById("tutorial-dots");
+    if (titleEl) titleEl.textContent = step.title;
+    if (textEl) textEl.textContent = step.text;
+    if (nextBtn) nextBtn.textContent = tutorialStepIndex === TUTORIAL_STEPS.length - 1 ? "LET'S PLAY!" : "NEXT";
+    if (dotsEl) dotsEl.textContent = TUTORIAL_STEPS.map((_, i) => i === tutorialStepIndex ? "●" : "○").join(" ");
+}
+
+function advanceTutorial() {
+    audio.playClick();
+    if (tutorialStepIndex < TUTORIAL_STEPS.length - 1) {
+        tutorialStepIndex++;
+        renderTutorialStep();
+    } else {
+        dismissTutorial();
+    }
+}
+
+function dismissTutorial() {
+    localStorage.setItem("wordrop_tutorial_done", "1");
+    const overlay = document.getElementById("tutorial-overlay");
+    if (overlay) overlay.classList.add("hidden");
+    isPaused = false; // unfreeze the rise
+}
+
 /* --- Initialization --- */
 
 async function initGame() {
@@ -332,6 +617,9 @@ async function initGame() {
 
     // Start Game
     startGame();
+
+    // First launch only: freeze the board and walk through 3 quick steps.
+    maybeShowTutorial();
 }
 
 if (document.readyState === "loading") {
@@ -441,6 +729,26 @@ function setupEventListeners() {
         });
     });
 
+    // Tier-1 retention features (daily / share / tutorial)
+    const btnDaily = document.getElementById("btn-daily");
+    if (btnDaily) btnDaily.addEventListener("click", () => {
+        audio.playClick();
+        closeLevelSelectModal();
+        startDailyChallenge();
+    });
+    const btnShare = document.getElementById("btn-share");
+    if (btnShare) btnShare.addEventListener("click", () => {
+        audio.playClick();
+        shareResultCard();
+    });
+    const btnTutorialNext = document.getElementById("btn-tutorial-next");
+    if (btnTutorialNext) btnTutorialNext.addEventListener("click", advanceTutorial);
+    const btnTutorialSkip = document.getElementById("btn-tutorial-skip");
+    if (btnTutorialSkip) btnTutorialSkip.addEventListener("click", () => {
+        audio.playClick();
+        dismissTutorial();
+    });
+
     btnShuffle.addEventListener("click", triggerShuffle);
     btnHint.addEventListener("click", triggerHint);
     if (btnVortex) btnVortex.addEventListener("click", triggerVortex);
@@ -478,6 +786,17 @@ function setupEventListeners() {
 
 function openLevelSelectModal() {
     audio.playClick();
+    // Refresh the Daily Challenge status line every time the modal opens.
+    const statusEl = document.getElementById("daily-status");
+    if (statusEl) {
+        const streak = getDailyStreak();
+        const parts = [];
+        if (streak > 0) parts.push(`🔥 Streak: ${streak} day${streak === 1 ? "" : "s"}`);
+        parts.push(hasPlayedDailyToday()
+            ? `Today's best: ${getDailyBestToday().toLocaleString()}`
+            : "Not played today yet!");
+        statusEl.textContent = parts.join(" · ");
+    }
     if (levelSelectOverlay) levelSelectOverlay.classList.remove("hidden");
 }
 
@@ -487,6 +806,7 @@ function closeLevelSelectModal() {
 }
 
 function selectLevel(targetLvl) {
+    isDailyMode = false; // picking a manual level always exits daily mode
     level = parseInt(targetLvl) || 1;
     levelValEl.textContent = level;
     
@@ -524,9 +844,16 @@ function getTileMatrixContainer() {
 }
 
 function startGame() {
+    // Daily Challenge: re-seed the PRNG at the top of EVERY daily run
+    // (not just the first) so replaying today's daily always deals the
+    // identical board. Non-daily runs leave dailyRng untouched/unused.
+    if (isDailyMode) {
+        dailyRng = mulberry32(dailySeedForDate(localDateKey()));
+    }
+
     // Reset scores & states
     score = 0;
-    level = 1;
+    level = isDailyMode ? DAILY_START_LEVEL : 1;
     wordsClearedCount = 0;
     longestWordSpelled = "—";
     isPlaying = true;
@@ -541,7 +868,7 @@ function startGame() {
     resizeSwipeCanvas();
 
     if (scoreValEl) scoreValEl.textContent = formatScore(score);
-    if (levelValEl) levelValEl.textContent = level;
+    if (levelValEl) levelValEl.textContent = isDailyMode ? `${level}🔥` : level;
     if (timerBarEl) timerBarEl.style.width = "0%";
     if (boardEl) boardEl.classList.remove("danger");
 
@@ -591,6 +918,11 @@ function startGame() {
 
     // Start Rise Timer
     startRiseTimer();
+
+    // Soft looping water/wind/forest ambience -- see audio.js. Started
+    // here (a real user gesture already happened to reach startGame(),
+    // so the AudioContext is free to init) rather than at page load.
+    audio.startAmbience();
 }
 
 function spawnTile(x, y, forcedLetter = null, isGlow = false, burstValue = null) {
@@ -600,10 +932,8 @@ function spawnTile(x, y, forcedLetter = null, isGlow = false, burstValue = null)
     const letter = forcedLetter || getRandomLetter();
     const value = TILE_VALUES[letter];
 
-    // Determine rarity class
-    let rarityClass = "tile-common";
-    if (value >= 5) rarityClass = "tile-rare";
-    else if (value >= 2) rarityClass = "tile-uncommon";
+    // Determine rarity class (see RARITY_TIERS above)
+    const rarityClass = getRarityClass(value);
 
     // Create element
     const tileEl = document.createElement("div");
@@ -648,7 +978,8 @@ function spawnTile(x, y, forcedLetter = null, isGlow = false, burstValue = null)
 function shouldSpawnGlowTile() {
     if (level < GLOW_TILE_UNLOCK_LEVEL) return false;
     if (countGlowTilesOnBoard() >= MAX_GLOW_TILES_ON_BOARD) return false;
-    return Math.random() < GLOW_TILE_SPAWN_CHANCE;
+    // gameRand() so daily-mode glow spawns are part of the seeded stream.
+    return gameRand() < GLOW_TILE_SPAWN_CHANCE;
 }
 
 function countGlowTilesOnBoard() {
@@ -661,14 +992,25 @@ function countGlowTilesOnBoard() {
     return count;
 }
 
-// Threshold scales gently with level so later levels ask a bit more of a
-// single word to trigger a burst. A first-pass tuning value, easy to adjust.
+// Rebalanced 2026-07-31: the original 5-10 range (5 + random(0-5) +
+// level/3) meant even a real word only met the threshold ~55% of the time
+// AT BEST (when it happened to land in the glow tile's row/column at all),
+// which reads as "broken" rather than "a bit lucky" -- confirmed via Monte
+// Carlo simulation against calculateWordScore() with common 3-4 letter
+// words. A striped/special tile should behave like Candy Crush's striped
+// candy: near-guaranteed to do its big thing once matched, not a coin
+// flip. New formula is deterministic and low enough that virtually any
+// real 3+ letter word clears it at low levels (100% in simulation at
+// level 1), with a small, gentle bump at higher levels so it isn't
+// completely trivial forever.
 function rollGlowThreshold() {
-    return 5 + Math.floor(Math.random() * 6) + Math.floor(level / 3);
+    return 3 + Math.floor(level / 4);
 }
 
 function getRandomLetter() {
-    const index = Math.floor(Math.random() * WEIGHTED_LETTERS.length);
+    // gameRand(), not Math.random -- in Daily Challenge mode this draws
+    // from the date-seeded PRNG so everyone gets the same letters.
+    const index = Math.floor(gameRand() * WEIGHTED_LETTERS.length);
     return WEIGHTED_LETTERS[index];
 }
 
@@ -689,11 +1031,9 @@ function resolveInitialMatches() {
                     tile.letter = newLetter;
                     tile.value = TILE_VALUES[newLetter];
                     
-                    // Rebuild inner HTML and classes
-                    let rarityClass = "tile-common";
-                    if (tile.value >= 5) rarityClass = "tile-rare";
-                    else if (tile.value >= 2) rarityClass = "tile-uncommon";
-                    
+                    // Rebuild inner HTML and classes (see RARITY_TIERS above)
+                    const rarityClass = getRarityClass(tile.value);
+
                     tile.el.className = `tile ${rarityClass}`;
                     tile.el.querySelector(".tile-letter").textContent = newLetter;
                     tile.el.querySelector(".tile-value").textContent = tile.value;
@@ -1181,6 +1521,7 @@ function triggerRowColumnBurst(glowTile, direction) {
     showWordClearPopup(`⚡ ${isHorizontal ? "ROW" : "COLUMN"} GLOW! +${totalBonus}`, { el: boardEl });
     audio.playSlash();
     audio.playBurstPop();
+    hapticImpact("Heavy"); // the big payoff moment deserves the big thump
 }
 
 async function sliceClearWord(match) {
@@ -1193,7 +1534,9 @@ async function sliceClearWord(match) {
     // Play sounds: blade slash whoosh + acoustic burst pop + chime
     audio.playSlash();
     audio.playBurstPop();
-    
+    // Tactile thump on every word clear -- bigger words hit harder.
+    hapticImpact(match.word.length >= 5 ? "Medium" : "Light");
+
     setTimeout(() => {
         audio.playWordClear(match.word.length);
     }, 80);
@@ -1327,11 +1670,9 @@ function spawnWordBurstRing(tiles, variant = "") {
 }
 
 // Rarity-matched particle color so the burst visually ties back to what was
-// actually cleared (a rare gold tile bursts gold, not a generic cyan).
+// actually cleared (a legendary gold tile bursts gold, not a generic cyan).
 function getRarityColor(value) {
-    if (value >= 5) return "#f59e0b"; // rare
-    if (value >= 2) return "#a855f7"; // uncommon
-    return "#3b82f6"; // common
+    return getRarityTier(value).color;
 }
 
 function spawnTileSparks(tile) {
@@ -1339,8 +1680,9 @@ function spawnTileSparks(tile) {
     const rect = tile.el.getBoundingClientRect();
     const cx = rect.left - parentRect.left + rect.width / 2;
     const cy = rect.top - parentRect.top + rect.height / 2;
-    // Glow-tile bursts get a distinct fiery color so a row/column
-    // detonation always reads visually different from a normal word clear.
+    // Glow-tile bursts use the same burning-orange color as the tile's own
+    // palette (style.css .tile-glow / --epic-border) so a row/column
+    // detonation always reads visually as "that tile's power."
     const color = tile.glow ? "#f97316" : getRarityColor(tile.value);
 
     const PARTICLE_COUNT = 8;
@@ -1366,9 +1708,7 @@ function spawnTileSparks(tile) {
 }
 
 function getRarityClass(value) {
-    if (value >= 5) return "tile-rare";
-    if (value >= 2) return "tile-uncommon";
-    return "tile-common";
+    return getRarityTier(value).cssClass;
 }
 
 function calculateWordScore(match, comboStreak) {
@@ -1697,10 +2037,11 @@ function checkLevelProgression() {
 
     if (targetLevel > level) {
         level = targetLevel;
-        levelValEl.textContent = level;
+        levelValEl.textContent = isDailyMode ? `${level}🔥` : level;
 
         // Triumphant Level Up effects!
         audio.playLevelUp();
+        hapticNotification("Success");
         triggerScreenShake();
         showWordClearPopup(`LEVEL ${level} UNLOCKED!`, { el: boardEl });
 
@@ -1885,23 +2226,40 @@ function togglePause() {
     if (isPaused) {
         pauseOverlay.classList.remove("hidden");
         btnPause.textContent = "▶️";
+        audio.duckAmbience();
     } else {
         pauseOverlay.classList.add("hidden");
         btnPause.textContent = "⏸️";
+        audio.unduckAmbience();
     }
 }
 
 function triggerGameOver() {
     isPlaying = false;
     if (riseTimerInterval) clearInterval(riseTimerInterval);
-    
+
     audio.playGameOver();
+    hapticNotification("Error");
+    audio.stopAmbience();
     boardEl.classList.remove("danger");
 
     // Display overlay stats
     finalScoreEl.textContent = score.toLocaleString();
     finalLevelEl.textContent = level;
     finalWordsCountEl.textContent = wordsClearedCount;
+
+    // Daily Challenge: record the finished run (streak counts once/day,
+    // best score updates on replays) and surface it on the overlay.
+    const dailyLine = document.getElementById("daily-result-line");
+    if (dailyLine) {
+        if (isDailyMode) {
+            const daily = recordDailyRunFinished(score);
+            dailyLine.textContent = `🔥 Daily streak: ${daily.streak} day${daily.streak === 1 ? "" : "s"} · Today's best: ${daily.best.toLocaleString()}`;
+            dailyLine.classList.remove("hidden");
+        } else {
+            dailyLine.classList.add("hidden");
+        }
+    }
 
     gcSubmitScore(score);
 

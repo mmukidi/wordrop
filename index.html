@@ -13,7 +13,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Outfit:wght@400;600;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=20260730_1410">
+    <link rel="stylesheet" href="style.css?v=20260801_1500">
     <!-- Sentry Production Error Tracking SDK -->
     <script src="https://browser.sentry-cdn.com/7.114.0/bundle.min.js" crossorigin="anonymous"></script>
     <script>
@@ -162,9 +162,18 @@
                 <div class="info-section">
                     <h3>⭐ SCORING & RARITIES</h3>
                     <p>• Each letter has a point value in the corner (e.g. <b>A=1</b>, <b>Z=9</b>, <b>Q=9</b>).</p>
-                    <p>• <b>Blue Tiles:</b> Common letters.</p>
-                    <p>• <b>Purple Tiles:</b> Uncommon letters.</p>
-                    <p>• <b>Glowing Gold Tiles:</b> Rare high-value letters!</p>
+                    <p>• <b>Blue (Common, 1pt):</b> A, E, I, N, O, R, S, T, U</p>
+                    <p>• <b>Green (Uncommon, 2pt):</b> D, G, L, M</p>
+                    <p>• <b>Purple (Scarce, 3pt):</b> B, C, H, P</p>
+                    <p>• <b>Pink (Rare, 4pt):</b> F, V, W, Y</p>
+                    <p>• <b>Burning Orange (Epic, 6pt):</b> J, K</p>
+                    <p>• <b>Red (Mythic, 8pt):</b> X</p>
+                    <p>• <b>Gold (Legendary, 9pt):</b> Q, Z</p>
+                </div>
+
+                <div class="info-section">
+                    <h3>✨ GLOW TILES</h3>
+                    <p>• <b>Burning-Orange Dashed Tiles</b> carry a ⚡ burst number badge — clear any single word worth that many points anywhere in that tile's row or column, and the whole row or column detonates for a big cumulative score bonus!</p>
                 </div>
 
                 <div class="info-section">
@@ -189,8 +198,14 @@
     <div id="level-select-overlay" class="overlay hidden">
         <div class="overlay-content level-select-content">
             <h2>🎯 SELECT LEVEL</h2>
+
+            <div class="daily-section">
+                <button id="btn-daily" class="action-btn daily-btn">🔥 TODAY'S DAILY CHALLENGE</button>
+                <p id="daily-status" class="daily-status"></p>
+            </div>
+
             <p>Higher levels rise 3s faster but award +50% more points per word!</p>
-            
+
             <div class="level-grid">
                 <button class="level-select-btn active" data-lvl="1">
                     <span class="lvl-title">LVL 1</span>
@@ -268,10 +283,24 @@
                 </div>
             </div>
 
+            <p id="daily-result-line" class="daily-result hidden"></p>
+
+            <button id="btn-share" class="action-btn">📤 SHARE RESULT</button>
             <button id="btn-play-again" class="action-btn primary">PLAY AGAIN</button>
         </div>
     </div>
 
-    <script type="module" src="game.js?v=20260731_1700"></script>
+    <!-- First-Run Tutorial Overlay (3 steps, shown once) -->
+    <div id="tutorial-overlay" class="overlay hidden">
+        <div class="overlay-content tutorial-content">
+            <h2 id="tutorial-title"></h2>
+            <p id="tutorial-text"></p>
+            <p id="tutorial-dots" class="tutorial-dots"></p>
+            <button id="btn-tutorial-next" class="action-btn primary">NEXT</button>
+            <button id="btn-tutorial-skip" class="text-btn">Skip tutorial</button>
+        </div>
+    </div>
+
+    <script type="module" src="game.js?v=20260801_1500"></script>
 </body>
 </html>

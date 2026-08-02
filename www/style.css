@@ -10,18 +10,37 @@
     --text-light: #f3f4f6;
     --text-muted: #9ca3af;
     
-    /* Tile Rarity Colors */
+    /* Tile Rarity Colors -- redesigned 2026-07-31, one color per distinct
+       letter point value (see RARITY_TIERS in game.js and the table in
+       TESTING.md), low-to-high "heat" gradient so every tier is visually
+       distinct at a glance instead of 3 broad buckets. */
     --common-bg: rgba(59, 130, 246, 0.25);
     --common-border: #3b82f6;
     --common-glow: rgba(59, 130, 246, 0.4);
-    
-    --uncommon-bg: rgba(168, 85, 247, 0.25);
-    --uncommon-border: #a855f7;
-    --uncommon-glow: rgba(168, 85, 247, 0.4);
-    
-    --rare-bg: rgba(245, 158, 11, 0.25);
-    --rare-border: #f59e0b;
-    --rare-glow: rgba(245, 158, 11, 0.5);
+
+    --uncommon-bg: rgba(34, 197, 94, 0.25);
+    --uncommon-border: #22c55e;
+    --uncommon-glow: rgba(34, 197, 94, 0.4);
+
+    --scarce-bg: rgba(168, 85, 247, 0.25);
+    --scarce-border: #a855f7;
+    --scarce-glow: rgba(168, 85, 247, 0.4);
+
+    --rare-bg: rgba(236, 72, 153, 0.25);
+    --rare-border: #ec4899;
+    --rare-glow: rgba(236, 72, 153, 0.45);
+
+    --epic-bg: rgba(249, 115, 22, 0.25);
+    --epic-border: #f97316;
+    --epic-glow: rgba(249, 115, 22, 0.5);
+
+    --mythic-bg: rgba(239, 68, 68, 0.25);
+    --mythic-border: #ef4444;
+    --mythic-glow: rgba(239, 68, 68, 0.5);
+
+    --legendary-bg: rgba(234, 179, 8, 0.25);
+    --legendary-border: #eab308;
+    --legendary-glow: rgba(234, 179, 8, 0.55);
 }
 
 /* Reset and Core Styling */
@@ -399,7 +418,10 @@ body {
     pointer-events: none !important;
 }
 
-/* Letter Rarity Classes */
+/* Letter Rarity Classes -- redesigned 2026-07-31, 7 tiers keyed to every
+   distinct letter point value (1,2,3,4,6,8,9), low-to-high "heat"
+   gradient. Full name/value/color table lives in TESTING.md; keep this
+   in sync with RARITY_TIERS in game.js if either changes. */
 .tile-common .tile-inner {
     background-color: var(--common-bg);
     border-color: var(--common-border);
@@ -412,31 +434,97 @@ body {
 .tile-uncommon .tile-inner {
     background-color: var(--uncommon-bg);
     border-color: var(--uncommon-border);
-    box-shadow: 0 0 10px var(--uncommon-glow);
+    box-shadow: 0 0 9px var(--uncommon-glow);
 }
 .tile-uncommon .tile-letter {
+    color: #dcfce7;
+}
+
+.tile-scarce .tile-inner {
+    background-color: var(--scarce-bg);
+    border-color: var(--scarce-border);
+    box-shadow: 0 0 10px var(--scarce-glow);
+}
+.tile-scarce .tile-letter {
     color: #f3e8ff;
 }
 
 .tile-rare .tile-inner {
     background-color: var(--rare-bg);
     border-color: var(--rare-border);
-    box-shadow: 0 0 12px var(--rare-glow);
-    animation: goldPulse 2s infinite ease-in-out;
+    box-shadow: 0 0 11px var(--rare-glow);
 }
 .tile-rare .tile-letter {
-    color: #fef3c7;
+    color: #fce7f3;
+}
+
+/* Epic, Mythic, and Legendary (the 3 highest point tiers -- 6, 8, and 9)
+   additionally pulse, same as the old single "rare" tier used to, so the
+   rarest letters still read as visually special, not just differently
+   colored. All 3 share one keyframe animation via CSS custom properties
+   instead of 3 near-duplicate @keyframes blocks. */
+.tile-epic .tile-inner {
+    background-color: var(--epic-bg);
+    border-color: var(--epic-border);
+    --pulse-glow: var(--epic-glow);
+    --pulse-border: var(--epic-border);
+    --pulse-border-peak: #fdba74;
+    animation: tierPulse 2s infinite ease-in-out;
+}
+.tile-epic .tile-letter {
+    color: #ffedd5;
+}
+
+.tile-mythic .tile-inner {
+    background-color: var(--mythic-bg);
+    border-color: var(--mythic-border);
+    --pulse-glow: var(--mythic-glow);
+    --pulse-border: var(--mythic-border);
+    --pulse-border-peak: #fca5a5;
+    animation: tierPulse 2s infinite ease-in-out;
+}
+.tile-mythic .tile-letter {
+    color: #fee2e2;
+}
+
+.tile-legendary .tile-inner {
+    background-color: var(--legendary-bg);
+    border-color: var(--legendary-border);
+    --pulse-glow: var(--legendary-glow);
+    --pulse-border: var(--legendary-border);
+    --pulse-border-peak: #fde047;
+    animation: tierPulse 2s infinite ease-in-out;
+}
+.tile-legendary .tile-letter {
+    color: #fef9c3;
+}
+
+@keyframes tierPulse {
+    0%, 100% {
+        box-shadow: 0 0 10px var(--pulse-glow), inset 0 0 6px rgba(255, 255, 255, 0.05);
+        border-color: var(--pulse-border);
+    }
+    50% {
+        box-shadow: 0 0 20px var(--pulse-border), inset 0 0 10px rgba(255, 255, 255, 0.2);
+        border-color: var(--pulse-border-peak);
+    }
 }
 
 /* Glow Tiles — normal tiles (fall/shuffle/swap like any other) that also
    carry a burst threshold badge (see game.js GLOW_TILE_* constants).
-   Distinct fiery palette from rarity colors so they read immediately as
-   "different" from normal tiles. */
+   Reuses the same "burning orange" as the Epic letter tier (6+ points)
+   per explicit design direction, rather than a separate cyan/magenta
+   palette -- the earlier striped cyan/magenta version was tried and
+   didn't look good in practice. Kept solid (no stripes/shimmer): a
+   dashed border + the ⚡ burst badge + a faster, hotter pulse than Epic's
+   are what set it apart from a plain Epic letter tile now, not the hue. */
 .tile-glow .tile-inner {
-    background-color: rgba(249, 115, 22, 0.22);
-    border-color: #f97316;
-    box-shadow: 0 0 14px rgba(249, 115, 22, 0.55);
-    animation: glowPulse 1.4s infinite ease-in-out;
+    background-color: var(--epic-bg);
+    border-color: var(--epic-border);
+    border-width: 2px;
+    border-style: dashed;
+    box-shadow: 0 0 14px var(--epic-glow);
+    animation: glowPulse 1.1s infinite ease-in-out;
 }
 .tile-glow .tile-letter {
     color: #ffedd5;
@@ -455,24 +543,12 @@ body {
 
 @keyframes glowPulse {
     0%, 100% {
-        box-shadow: 0 0 12px rgba(249, 115, 22, 0.5), inset 0 0 6px rgba(255, 255, 255, 0.05);
-        border-color: #f97316;
+        box-shadow: 0 0 12px var(--epic-glow), inset 0 0 6px rgba(255, 255, 255, 0.08);
+        border-color: var(--epic-border);
     }
     50% {
-        box-shadow: 0 0 22px rgba(249, 115, 22, 0.9), inset 0 0 10px rgba(255, 255, 255, 0.25);
-        border-color: #fb923c;
-    }
-}
-
-/* Animations */
-@keyframes goldPulse {
-    0%, 100% {
-        box-shadow: 0 0 10px var(--rare-glow), inset 0 0 6px rgba(255, 255, 255, 0.05);
-        border-color: var(--rare-border);
-    }
-    50% {
-        box-shadow: 0 0 18px var(--rare-border), inset 0 0 10px rgba(255, 255, 255, 0.2);
-        border-color: #ffe893;
+        box-shadow: 0 0 26px var(--epic-border), inset 0 0 12px rgba(255, 255, 255, 0.3);
+        border-color: #fed7aa;
     }
 }
 
@@ -1057,11 +1133,12 @@ body {
 }
 
 /* Row/Column Glow Burst — same ring/flash mechanism as a normal word
-   clear, spanning the full row or column, in a distinct fiery palette so
-   it reads as a bigger, different event. */
+   clear, spanning the full row or column, in the same burning-orange
+   palette as the tile itself so the burst reads as "that tile's power,"
+   not a generic explosion. */
 .word-burst-ring.glow {
     border-color: #f97316;
-    box-shadow: 0 0 40px #f97316, inset 0 0 24px #fbbf24;
+    box-shadow: 0 0 40px #f97316, inset 0 0 24px #fdba74;
 }
 
 .word-burst-flash.glow {
@@ -1190,4 +1267,69 @@ body {
     box-shadow: 0 0 20px var(--neon-cyan), inset 0 0 10px rgba(0, 240, 255, 0.5) !important;
     transform: scale(1.06);
     transition: transform 0.08s ease-out;
+}
+
+/* ==========================================================================
+   Tier-1 retention features (2026-08-01): Daily Challenge, share card,
+   first-run tutorial
+   ========================================================================== */
+
+/* Daily Challenge section inside the level-select modal */
+.daily-section {
+    margin: 12px 0 16px;
+    padding: 12px;
+    border: 1px solid #f97316;
+    border-radius: 12px;
+    background: rgba(249, 115, 22, 0.10);
+}
+
+.daily-btn {
+    width: 100%;
+    border-color: #f97316 !important;
+    box-shadow: 0 0 12px rgba(249, 115, 22, 0.5);
+}
+
+.daily-status {
+    margin: 8px 0 0;
+    font-size: 0.8rem;
+    opacity: 0.85;
+}
+
+/* Daily streak line on the game-over overlay */
+.daily-result {
+    margin: 4px 0 10px;
+    font-size: 0.9rem;
+    color: #f97316;
+    text-shadow: 0 0 8px rgba(249, 115, 22, 0.6);
+}
+
+/* First-run tutorial */
+.tutorial-content {
+    max-width: 340px;
+}
+
+.tutorial-content p {
+    line-height: 1.5;
+}
+
+.tutorial-dots {
+    letter-spacing: 6px;
+    opacity: 0.8;
+    margin: 10px 0;
+}
+
+.text-btn {
+    display: block;
+    margin: 10px auto 0;
+    background: none;
+    border: none;
+    color: inherit;
+    opacity: 0.6;
+    font-size: 0.8rem;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.text-btn:hover {
+    opacity: 1;
 }
