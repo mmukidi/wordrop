@@ -414,6 +414,7 @@ function recordDailyRunFinished(finalScore) {
 }
 
 function startDailyChallenge() {
+    if (isLevel0) level0Finish(); // leaving the tutorial for the daily board
     isDailyMode = true;
     startGame(); // startGame() re-seeds dailyRng itself (so replays get the identical board)
     showWordClearPopup("🔥 DAILY CHALLENGE!", { el: boardEl });
@@ -505,47 +506,122 @@ async function shareResultCard() {
 }
 
 /* --- Level 0: Guided Tutorial Game Mode ---
- * A real playable level (not an overlay) that teaches the core mechanics
- * through gameplay. Board starts frozen, with guided hints at each step:
- * 1. Swipe to spell (a pre-placed easy word)
- * 2. Shuffle mechanic
- * 3. Glow tile row/column burst
- * 4. Rise unlocks, free play
- * Shown once per device, skippable at any point.
+ * A real playable level (not an overlay) that teaches every core mechanic
+ * by making the player actually DO it. Fully action-driven: each step
+ * stages the board, spotlights exactly which tiles/buttons to touch, and
+ * refuses to advance until the player performs that specific action
+ * correctly. Nothing is on a timer and the rise is disabled until the very
+ * last step, so a first-time player can never fail or get lost.
+ *
+ * Progression (each gate is a real user action, not a "Next" button):
+ *   1. SWIPE   -- clear the pre-placed word C-A-T
+ *   2. SWAP    -- drag across exactly 2 tiles to turn O-T-P into T-O-P
+ *   3. SPELL   -- swipe the word they just built
+ *   4. SHUFFLE -- tap the 🌀 button
+ *   5. GLOW    -- clear a word in the ⚡ tile's row to detonate the row
+ *   6. RISE    -- rise unlocks, tutorial ends, free play begins
+ *
+ * Shown once per device (localStorage "wordrop_level0_done").
  */
 
 let isLevel0 = false;
-let level0Step = 0; // 0=intro, 1=swipe, 2=shuffle, 3=glow, 4=rise unlocked/free
+let level0Step = 0;
+let level0TargetIds = [];      // tile ids currently spotlighted
+let level0Locked = false;      // true while a cheer/stage transition plays
+
+// How long the green "✓ you did it" confirmation sits before the next step
+// is staged. Long enough to read, short enough not to feel like waiting.
+const LEVEL_0_CHEER_MS = 1200;
+
+// Each step: what to say, how to stage the board, and which player action
+// completes it. `gate` receives the event name emitted by the real game
+// functions (see level0Notify call sites) and returns true to advance.
 const LEVEL_0_STEPS = [
-    { title: "🎮 SWIPE TO SPELL", hint: "Drag across 3+ letters in a line to spell a word. Try: C-A-T" },
-    { title: "🔀 SHUFFLE", hint: "Tap SHUFFLE to rearrange tiles when you're stuck." },
-    { title: "⚡ GLOW TILES", hint: "This orange ⚡ tile bursts its entire row/column when you clear a word worth ⚡ points in it!" },
-    { title: "📈 RISE & SURVIVE", hint: "The board rises! Keep stacking tiles low by clearing words before they hit the top." }
+    {
+        key: "swipe",
+        title: "STEP 1 OF 6 · SWIPE TO SPELL",
+        hint: "Drag your finger across the 3 glowing tiles: C → A → T",
+        cheer: "✓ That's a word! Tiles cleared.",
+        stage: () => level0PlaceWord(0, 0, "CAT", true),
+        gate: (evt) => evt === "wordCleared"
+    },
+    {
+        key: "swap",
+        title: "STEP 2 OF 6 · SWAP TWO TILES",
+        hint: "Drag across only 2 tiles to swap them. Swap the glowing pair to make T-O-P.",
+        cheer: "✓ Nice swap! Two tiles = swap, three or more = word.",
+        stage: () => level0PlaceWord(0, 0, "OTP", true, 2),
+        gate: () => level0ReadRow(0, 0, 3) === "TOP"
+    },
+    {
+        key: "spell",
+        title: "STEP 3 OF 6 · NOW CLEAR IT",
+        hint: "You built T-O-P. Swipe across it to clear it and score.",
+        cheer: "✓ Swap, then spell. That's the whole game.",
+        stage: () => level0SpotlightRow(0, 0, 3),
+        gate: (evt) => evt === "wordCleared"
+    },
+    {
+        key: "shuffle",
+        title: "STEP 4 OF 6 · SHUFFLE WHEN STUCK",
+        hint: "No words left? Tap the glowing 🌀 SHUFFLE button to remix the whole board.",
+        cheer: "✓ Board remixed. Use this any time you're stuck.",
+        stage: () => level0SpotlightShuffle(true),
+        gate: (evt) => evt === "shuffle"
+    },
+    {
+        key: "glow",
+        title: "STEP 5 OF 6 · GLOW TILE POWER",
+        hint: "The orange ⚡ tile blows up its ENTIRE row. Clear D-O-G in its row to set it off!",
+        cheer: "💥 BOOM! Whole row cleared for bonus points.",
+        stage: () => level0StageGlowStep(),
+        gate: (evt) => evt === "glowBurst"
+    },
+    {
+        key: "rise",
+        title: "STEP 6 OF 6 · SURVIVE THE RISE",
+        hint: "Now the board rises. Keep clearing words so tiles never reach the top. You're ready — good luck!",
+        cheer: "🎓 Tutorial complete. Go get a high score!",
+        stage: () => level0StartFreePlay(),
+        gate: () => false // ends via the countdown inside level0StartFreePlay
+    }
 ];
 
 function startLevel0() {
-    if (localStorage.getItem("wordrop_level0_done")) {
-        // Already completed tutorial, start a normal Level 1 instead
-        selectLevel(1);
-        return;
-    }
     isLevel0 = true;
+    isDailyMode = false;
     level0Step = 0;
+    level0TargetIds = [];
+    level0Locked = false;
     level = 1;
-    levelValEl.textContent = "🎓";
-    startGame();
+    if (levelValEl) levelValEl.textContent = "🎓";
+    startGame(); // stages step 1 + shows its hint via level0EnterStep()
+}
+
+function level0CurrentStep() {
+    return LEVEL_0_STEPS[level0Step] || null;
+}
+
+// Stage the board for the current step, then show its instruction.
+function level0EnterStep() {
+    const step = level0CurrentStep();
+    if (!step) return;
+    level0ClearSpotlights();
+    level0SpotlightShuffle(false);
+    if (typeof step.stage === "function") step.stage();
+    level0UpdateControls();
     showLevel0Hint();
 }
 
 function showLevel0Hint() {
-    const step = LEVEL_0_STEPS[level0Step];
+    const step = level0CurrentStep();
     const hintEl = document.getElementById("level0-hint");
-    if (!hintEl) return;
+    if (!hintEl || !step) return;
     const titleEl = hintEl.querySelector(".hint-title");
     const textEl = hintEl.querySelector(".hint-text");
     if (titleEl) titleEl.textContent = step.title;
     if (textEl) textEl.textContent = step.hint;
-    hintEl.classList.remove("hidden");
+    hintEl.classList.remove("hidden", "cheering");
 }
 
 function hideLevel0Hint() {
@@ -553,31 +629,187 @@ function hideLevel0Hint() {
     if (hintEl) hintEl.classList.add("hidden");
 }
 
-function advanceLevel0Step() {
-    level0Step++;
-    if (level0Step < LEVEL_0_STEPS.length) {
-        showLevel0Hint();
-    } else {
-        // Tutorial complete
-        localStorage.setItem("wordrop_level0_done", "1");
-        hideLevel0Hint();
+// Green "you did it" confirmation shown in the hint box between steps.
+function showLevel0Cheer(text) {
+    const hintEl = document.getElementById("level0-hint");
+    if (!hintEl) return;
+    const titleEl = hintEl.querySelector(".hint-title");
+    const textEl = hintEl.querySelector(".hint-text");
+    if (titleEl) titleEl.textContent = text;
+    if (textEl) textEl.textContent = "";
+    hintEl.classList.remove("hidden");
+    hintEl.classList.add("cheering");
+}
+
+// Single entry point the rest of the game calls after a real player action.
+// Only the CURRENT step's gate can advance the tutorial, so actions done
+// out of order are simply ignored rather than skipping ahead.
+function level0Notify(evt) {
+    if (!isLevel0 || level0Locked) return;
+    const step = level0CurrentStep();
+    if (!step || typeof step.gate !== "function") return;
+    if (!step.gate(evt)) return;
+
+    level0Locked = true;
+    level0ClearSpotlights();
+    level0SpotlightShuffle(false);
+    showLevel0Cheer(step.cheer);
+    hapticNotification("Success");
+
+    setTimeout(() => {
+        level0Step++;
+        level0Locked = false;
+        if (level0Step >= LEVEL_0_STEPS.length) {
+            level0Finish();
+        } else {
+            level0EnterStep();
+        }
+    }, LEVEL_0_CHEER_MS);
+}
+
+// Last step: hand the board over to the player and let the rise begin.
+function level0StartFreePlay() {
+    level0UnlockAllControls();
+    setTimeout(() => {
+        if (!isLevel0) return;
+        level0Finish();
+    }, 5000);
+}
+
+function level0Finish() {
+    if (!isLevel0) return;
+    localStorage.setItem("wordrop_level0_done", "1");
+    isLevel0 = false;
+    level0Step = LEVEL_0_STEPS.length;
+    level0ClearSpotlights();
+    level0SpotlightShuffle(false);
+    level0UnlockAllControls();
+    hideLevel0Hint();
+    if (levelValEl) levelValEl.textContent = level;
+    if (!riseTimerInterval) startRiseTimer();
+}
+
+/* --- Level 0 board staging helpers --- */
+
+// Overwrite an existing tile's letter in place (keeps its element, so the
+// spotlight class and DOM position survive), or spawn one if the cell is
+// empty after gravity.
+function level0SetLetter(x, y, letter) {
+    const existing = grid[y] && grid[y][x];
+    if (!existing) {
+        spawnTile(x, y, letter);
+        return grid[y][x];
     }
+    if (existing.glow) return existing; // never clobber the ⚡ tile
+    const value = TILE_VALUES[letter];
+    existing.letter = letter;
+    existing.value = value;
+    existing.el.className = `tile ${getRarityClass(value)}`;
+    const letterSpan = existing.el.querySelector(".tile-letter");
+    const valueSpan = existing.el.querySelector(".tile-value");
+    if (letterSpan) letterSpan.textContent = letter;
+    if (valueSpan) valueSpan.textContent = value;
+    return existing;
 }
 
-function presetLevel0BoardStep1() {
-    // Step 1: place C-A-T horizontally in row 3 so swipe demo works
-    // Leave rest random
-    if (level0Step !== 0) return;
-    spawnTile(0, 3, "C");
-    spawnTile(1, 3, "A");
-    spawnTile(2, 3, "T");
+// Write `word` starting at (x, y) going right, optionally spotlighting the
+// first `spotlightCount` tiles (defaults to the whole word).
+function level0PlaceWord(x, y, word, spotlight = false, spotlightCount = null) {
+    const placed = [];
+    word.split("").forEach((ch, i) => {
+        const tile = level0SetLetter(x + i, y, ch);
+        if (tile) placed.push(tile);
+    });
+    if (spotlight) {
+        const count = spotlightCount == null ? placed.length : spotlightCount;
+        level0Spotlight(placed.slice(0, count));
+    }
+    return placed;
 }
 
-function presetLevel0BoardStep3() {
-    // Step 3: spawn a glow tile in row 2 so they can see the burst
-    if (level0Step !== 2) return;
-    const glowValue = rollGlowThreshold();
-    spawnTile(3, 2, null, true, glowValue);
+function level0SpotlightRow(x, y, len) {
+    const tiles = [];
+    for (let i = 0; i < len; i++) {
+        const t = grid[y] && grid[y][x + i];
+        if (t) tiles.push(t);
+    }
+    level0Spotlight(tiles);
+}
+
+// Read the letters currently sitting at (x..x+len-1, y) as a string.
+function level0ReadRow(x, y, len) {
+    let out = "";
+    for (let i = 0; i < len; i++) {
+        const t = grid[y] && grid[y][x + i];
+        if (!t) return "";
+        out += t.letter;
+    }
+    return out.toUpperCase();
+}
+
+// Stage the glow lesson: a ⚡ tile at the far end of row 0 plus the word
+// D-O-G in that same row, so clearing it detonates the whole row.
+function level0StageGlowStep() {
+    const y = 0;
+    const glowX = 6;
+    const existing = grid[y] && grid[y][glowX];
+    if (existing) {
+        existing.el.remove();
+        grid[y][glowX] = null;
+    }
+    // Threshold 3: D-O-G scores 5, so the burst is guaranteed to fire.
+    spawnTile(glowX, y, "E", true, 3);
+    level0PlaceWord(0, y, "DOG", true);
+    const glowTile = grid[y][glowX];
+    if (glowTile && glowTile.el) glowTile.el.classList.add("level0-target");
+}
+
+/* --- Level 0 spotlight + control gating --- */
+
+function level0Spotlight(tiles) {
+    level0ClearSpotlights();
+    level0TargetIds = [];
+    (tiles || []).forEach(t => {
+        if (!t || !t.el) return;
+        t.el.classList.add("level0-target");
+        level0TargetIds.push(t.id);
+    });
+}
+
+function level0ClearSpotlights() {
+    level0TargetIds = [];
+    if (!boardEl) return;
+    const container = getTileMatrixContainer() || boardEl;
+    container.querySelectorAll(".tile.level0-target")
+        .forEach(el => el.classList.remove("level0-target"));
+}
+
+function level0SpotlightShuffle(on) {
+    if (!btnShuffle) return;
+    btnShuffle.classList.toggle("level0-target-btn", !!on);
+}
+
+// Only the button the current step is teaching stays live. Everything else
+// is disabled so a brand-new player cannot wander off-script or waste
+// points on HINT/VORTEX before they know what those do.
+function level0UpdateControls() {
+    const step = level0CurrentStep();
+    const key = step ? step.key : null;
+    // The final "rise" step hands the game back to the player, so it must
+    // unlock everything rather than keep the training wheels on.
+    if (!step || key === "rise") {
+        level0UnlockAllControls();
+        return;
+    }
+    if (btnShuffle) btnShuffle.disabled = key !== "shuffle";
+    if (btnHint) btnHint.disabled = true;
+    if (btnVortex) btnVortex.disabled = true;
+}
+
+function level0UnlockAllControls() {
+    if (btnShuffle) btnShuffle.disabled = false;
+    if (btnHint) btnHint.disabled = false;
+    if (btnVortex) btnVortex.disabled = false;
 }
 
 /* --- Initialization --- */
@@ -821,6 +1053,9 @@ function closeLevelSelectModal() {
 
 function selectLevel(targetLvl) {
     isDailyMode = false; // picking a manual level always exits daily mode
+    // Picking a level mid-tutorial abandons Level 0 cleanly (spotlights off,
+    // controls re-enabled) rather than leaving the guided state half-applied.
+    if (isLevel0) level0Finish();
     level = parseInt(targetLvl) || 1;
     levelValEl.textContent = level;
     
@@ -919,12 +1154,6 @@ function startGame() {
         }
     }
 
-    // Level 0 tutorial: place specific tiles for teaching each step
-    if (isLevel0) {
-        presetLevel0BoardStep1();
-        presetLevel0BoardStep3();
-    }
-
     // Safety Verification Check: If 0 tiles exist, force emergency spawn
     const createdTiles = (container || boardEl).querySelectorAll(".tile");
     if (createdTiles.length === 0) {
@@ -939,8 +1168,18 @@ function startGame() {
     // Resolve any starting words immediately without scoring
     resolveInitialMatches();
 
-    // Start Rise Timer (Level 0 only starts after step 3)
-    if (!isLevel0 || level0Step >= 3) {
+    // Level 0 stages its scripted tiles AFTER resolveInitialMatches(), which
+    // would otherwise re-roll the very words the tutorial just placed.
+    if (isLevel0) {
+        level0EnterStep();
+    } else {
+        hideLevel0Hint();
+        level0UnlockAllControls();
+    }
+
+    // Start Rise Timer. Level 0 keeps the board completely still until the
+    // player reaches the final step, so nothing can kill them mid-lesson.
+    if (!isLevel0) {
         startRiseTimer();
     }
 
@@ -1348,6 +1587,10 @@ async function executeSwap(tileA, targetCol, targetRow) {
 
         // 3. Scan and cascade matches
         await resolveBoardCascades();
+
+        // Level 0: a real 2-tile swap is the gate for the swap step. Checked
+        // after cascades so the gate reads the settled board.
+        level0Notify("swap");
     } catch (err) {
         console.error("Error during executeSwap:", err);
         forceUnlockBoard();
@@ -1548,13 +1791,8 @@ function triggerRowColumnBurst(glowTile, direction) {
     audio.playBurstPop();
     hapticImpact("Heavy"); // the big payoff moment deserves the big thump
 
-    // Level 0 Step 3: Glow burst triggered → advance to free play
-    if (isLevel0 && level0Step === 2) {
-        advanceLevel0Step();
-        // Unlock the rise now
-        isPaused = false;
-        startRiseTimer();
-    }
+    // Level 0: firing a real row/column burst is the gate for the glow step.
+    level0Notify("glowBurst");
 }
 
 async function sliceClearWord(match) {
@@ -1635,10 +1873,8 @@ async function sliceClearWord(match) {
 
     gcRecordWordCleared(scoreResult.word);
 
-    // Level 0 Step 1: First word cleared → advance to shuffle step
-    if (isLevel0 && level0Step === 0) {
-        advanceLevel0Step();
-    }
+    // Level 0: a real word clear is the gate for the swipe/spell steps.
+    level0Notify("wordCleared");
 
     // Update Last Spelled Word HUD
     lastWordTextEl.textContent = scoreResult.word.toUpperCase();
@@ -2016,11 +2252,15 @@ async function triggerShuffle() {
 
         tilesList.forEach(t => t.el.classList.remove("swapping"));
 
-        // Activate cooldown
-        startShuffleCooldown();
+        // Activate cooldown (skipped during the Level 0 lesson so the button
+        // the tutorial just told them to press doesn't immediately grey out)
+        if (!isLevel0) startShuffleCooldown();
 
         // Check for words created by shuffle
         await resolveBoardCascades();
+
+        // Level 0: pressing the real SHUFFLE button is the gate for step 4.
+        level0Notify("shuffle");
     } catch (err) {
         console.error("Error during triggerShuffle:", err);
         forceUnlockBoard();
@@ -2281,11 +2521,9 @@ function triggerGameOver() {
     audio.stopAmbience();
     boardEl.classList.remove("danger");
 
-    // Level 0: mark as complete on game over (even if not all steps finished)
-    if (isLevel0) {
-        localStorage.setItem("wordrop_level0_done", "1");
-        hideLevel0Hint();
-    }
+    // Level 0: a game over ends the lesson (can't normally happen, since the
+    // rise is disabled until the final step, but never trap the player).
+    if (isLevel0) level0Finish();
 
     // Display overlay stats
     finalScoreEl.textContent = score.toLocaleString();
