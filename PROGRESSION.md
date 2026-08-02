@@ -128,6 +128,26 @@ word", but `calculateWordScore()` ignored it entirely — picking a harder
 level bought a faster board for identical score. It is now applied, which is
 also what makes the target curve above hold together.
 
+## Word Radar (early-level assist)
+
+New players rarely struggle with *swiping* — they struggle with **finding a
+word**. So rather than clearing words automatically on early levels (which
+would make the first levels play themselves, hollow out the star rewards,
+and leave the player with no muscle memory when control switched on), the
+game waits until they are visibly stuck and then shows them one.
+
+- Fires only after **5 seconds with no player action**
+- Only on **levels 1–3**; off from level 4
+- Points at the **highest-scoring** word available, teaching that long words
+  are what move the goal bar
+- Vanishes the instant the player touches the board
+- **Never clears the word** — the player still swipes it, so the clear and
+  the stars remain genuinely theirs
+
+A player who is finding words never sees it at all. Visually it is a soft,
+slow cyan breathe, deliberately quieter than the gold paid-HINT pulse and
+distinct from the white Level 0 tutorial spotlight.
+
 ## Deliberately not built (yet)
 
 - **Varied objectives** ("clear 4 words of 5+ letters", "trigger 2 glow

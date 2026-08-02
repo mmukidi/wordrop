@@ -187,6 +187,65 @@ const LEVEL_SPEEDS = {
 };
 const MAX_RISE_SPEED = 4.0;
 
+/* --- Word Radar (2026-08-02) -------------------------------------------
+ * A new player's problem is almost never "swiping is hard" -- it's "I
+ * can't find a word." So rather than clearing words for them (which would
+ * make the first levels play themselves and teach nothing before control
+ * switches on), the game waits until they're visibly stuck and then shows
+ * them one.
+ *
+ * Fires only after WORD_RADAR_IDLE_MS of no action, only on the first few
+ * levels, and vanishes the instant they do anything. A player who is
+ * finding words never sees it at all -- there's no hand-holding for
+ * someone who doesn't need it, and the player still performs the swipe
+ * themselves, so the clear (and the stars) remain genuinely theirs.
+ */
+const WORD_RADAR_MAX_LEVEL = 3;   // off from level 4 on
+const WORD_RADAR_IDLE_MS = 5000;  // "they've been staring for 5 seconds"
+
+let lastPlayerActionAt = Date.now();
+let wordRadarActive = false;
+
+// Anything that counts as the player engaging: starting a swipe, swapping,
+// clearing, shuffling. Resets the idle clock and dismisses the radar.
+function notePlayerAction() {
+    lastPlayerActionAt = Date.now();
+    if (wordRadarActive) clearWordRadar();
+}
+
+function maybeShowWordRadar() {
+    if (wordRadarActive) return;
+    if (isLevel0 || !isPlaying || isPaused || isBoardLocked) return;
+    if (level > WORD_RADAR_MAX_LEVEL) return;
+    if (Date.now() - lastPlayerActionAt < WORD_RADAR_IDLE_MS) return;
+    showWordRadar();
+}
+
+function showWordRadar() {
+    const { matches } = scanForWords();
+    if (!matches.length) return;
+
+    // Point at the highest-SCORING word, not merely the longest: the nudge
+    // should teach that big words are what actually move the goal bar.
+    let best = matches[0];
+    let bestScore = -1;
+    matches.forEach(m => {
+        const s = calculateWordScore(m, 1).score;
+        if (s > bestScore) { bestScore = s; best = m; }
+    });
+
+    best.tiles.forEach(t => { if (t && t.el) t.el.classList.add("word-radar"); });
+    wordRadarActive = true;
+}
+
+function clearWordRadar() {
+    wordRadarActive = false;
+    const container = getTileMatrixContainer() || boardEl;
+    if (!container) return;
+    container.querySelectorAll(".tile.word-radar")
+        .forEach(el => el.classList.remove("word-radar"));
+}
+
 function getLevelMultiplier(lvl) {
     // Level 1 = 1.0x, Level 2 = 1.5x (+50%), Level 3 = 2.0x (+100%), Level 4 = 2.5x (+150%)...
     return 1 + (lvl - 1) * 0.5;
@@ -1259,6 +1318,8 @@ function startGame({ keepScore = false } = {}) {
     levelScore = 0;
     levelWords = 0;
     levelCompletePending = false;
+    clearWordRadar();
+    lastPlayerActionAt = Date.now(); // give them the full idle window
     wordsClearedCount = keepScore ? wordsClearedCount : 0;
     longestWordSpelled = "—";
     isPlaying = true;
@@ -1569,6 +1630,10 @@ function handleMouseUp(e) {
 // ========================================================================
 
 function swipeBegin(clientX, clientY) {
+    // Touching the board at all means they're engaged -- dismiss the radar
+    // and restart the idle clock.
+    notePlayerAction();
+
     // Cheap safety net: if any tile was left floating by an interrupted
     // animation (see forceUnlockBoard), settle it before resolving what the
     // player is touching. A no-op when the board is already stable.
@@ -2038,6 +2103,7 @@ async function sliceClearWord(match) {
     const scoreResult = calculateWordScore(match, 1);
     wordsClearedCount++;
     levelWords++; // counted before updateScore, so stars judge this word too
+    notePlayerAction();
     updateScore(scoreResult.score);
 
     // Glow tile payoff: this single word's score met the threshold of a
@@ -2309,6 +2375,9 @@ function startRiseTimer() {
     riseTimerInterval = setInterval(() => {
         if (!isPlaying || isPaused || isBoardLocked) return;
 
+        // Piggyback the 100ms rise tick rather than running a second timer.
+        maybeShowWordRadar();
+
         const duration = LEVEL_SPEEDS[level] || MAX_RISE_SPEED;
         // Increment progress (ticks every 100ms)
         riseProgress += (100 / (duration * 10));
@@ -2358,6 +2427,10 @@ function startRiseTimer() {
 async function pushGridUp() {
     setBoardLock(true);
     try {
+        // The board is about to change under the radar's suggestion, so drop
+        // it and let it re-evaluate if the player is still idle.
+        clearWordRadar();
+
         // 0. Ensure all floating tiles are collapsed before rising
         applyGravity();
 
@@ -2441,6 +2514,7 @@ async function triggerShuffle() {
     // (one finger dragging the board, another tapping this button). Same
     // hazard the rise defers for -- see startRiseTimer().
     cancelActiveSwipe();
+    notePlayerAction(); // the radar's suggested word is about to move
 
     setBoardLock(true);
     try {
