@@ -7,9 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
-		32AEC6CD301FAE74003A65F8 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 32AEC6CC301FAE74003A65F8 /* CapApp-SPM */; };
-		32DA81F3301BB93A00A2E042 /* Capacitor in Frameworks */ = {isa = PBXBuildFile; productRef = 32DA81F2301BB93A00A2E042 /* Capacitor */; };
+		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };		32DA81F3301BB93A00A2E042 /* Capacitor in Frameworks */ = {isa = PBXBuildFile; productRef = 32DA81F2301BB93A00A2E042 /* Capacitor */; };
 		32DA81F5301BB93A00A2E042 /* Cordova in Frameworks */ = {isa = PBXBuildFile; productRef = 32DA81F4301BB93A00A2E042 /* Cordova */; };
 		32DA81F7301CF05500A2E042 /* GameCenterPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32DA81F6301CF02800A2E042 /* GameCenterPlugin.swift */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -42,7 +40,6 @@
 			files = (
 				32DA81F5301BB93A00A2E042 /* Cordova in Frameworks */,
 				32DA81F3301BB93A00A2E042 /* Capacitor in Frameworks */,
-				32AEC6CD301FAE74003A65F8 /* CapApp-SPM in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -138,7 +135,6 @@
 			mainGroup = 504EC2FB1FED79650016851F;
 			packageReferences = (
 				32DA81F1301BB93A00A2E042 /* XCRemoteSwiftPackageReference "capacitor-swift-pm" */,
-				32AEC6CB301FAE74003A65F8 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -389,12 +385,7 @@
 		};
 /* End XCConfigurationList section */
 
-/* Begin XCLocalSwiftPackageReference section */
-		32AEC6CB301FAE74003A65F8 /* XCLocalSwiftPackageReference "CapApp-SPM" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = "CapApp-SPM";
-		};
-/* End XCLocalSwiftPackageReference section */
+/* Begin XCLocalSwiftPackageReference section *//* End XCLocalSwiftPackageReference section */
 
 /* Begin XCRemoteSwiftPackageReference section */
 		32DA81F1301BB93A00A2E042 /* XCRemoteSwiftPackageReference "capacitor-swift-pm" */ = {
@@ -407,12 +398,7 @@
 		};
 /* End XCRemoteSwiftPackageReference section */
 
-/* Begin XCSwiftPackageProductDependency section */
-		32AEC6CC301FAE74003A65F8 /* CapApp-SPM */ = {
-			isa = XCSwiftPackageProductDependency;
-			productName = "CapApp-SPM";
-		};
-		32DA81F2301BB93A00A2E042 /* Capacitor */ = {
+/* Begin XCSwiftPackageProductDependency section */		32DA81F2301BB93A00A2E042 /* Capacitor */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 32DA81F1301BB93A00A2E042 /* XCRemoteSwiftPackageReference "capacitor-swift-pm" */;
 			productName = Capacitor;
