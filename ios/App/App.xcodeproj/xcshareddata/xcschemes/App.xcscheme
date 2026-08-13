@@ -1,38 +1,60 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
-   LastUpgradeVersion = "2660"
+   LastUpgradeVersion = "1400"
    version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
-      buildImplicitDependencies = "YES">
-      <BuildActionEntries>
-         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "504EC3031FED79650016851F"
-               BuildableName = "App.app"
-               BlueprintName = "App"
-               ReferencedContainer = "container:App.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-      </BuildActionEntries>
+      buildImplicitDependencies = "YES"
+      buildForTesting = "YES"
+      buildForRunning = "YES"
+      buildForProfiling = "YES"
+      buildForArchiving = "YES"
+      buildForAnalyzing = "YES">
+      <PreActions>
+         <ExecutionAction
+            ActionType = "Sh">
+            <EnvironmentBuildable>
+               <BuildableReference
+                  BuildableIdentifier = "primary"
+                  BlueprintIdentifier = "50F6691D25AEBDC800C159C7"
+                  BuildableName = "App.app"
+                  BlueprintName = "App"
+                  ReferencedContainer = "container:App.xcodeproj">
+               </BuildableReference>
+            </EnvironmentBuildable>
+            <ActionContent
+               title = "Run npm install before build"
+               scriptText = "cd &quot;$SRCROOT/../..&quot; || exit 1&#10;npm ci --legacy-peer-deps 2>/dev/null || npm install --legacy-peer-deps&#10;">
+            </ActionContent>
+         </ExecutionAction>
+      </PreActions>
+      <BuildableReference
+         BuildableIdentifier = "primary"
+         BlueprintIdentifier = "50F6691D25AEBDC800C159C7"
+         BuildableName = "App.app"
+         BlueprintName = "App"
+         ReferencedContainer = "container:App.xcodeproj">
+      </BuildableReference>
    </BuildAction>
    <TestAction
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
-      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES"
-      shouldAutocreateTestPlan = "YES">
+      selectedLaunchConfiguration = "Debug"
+      shouldUseLaunchSchemeArgsEnv = "YES">
+      <Buildables>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "50F6691D25AEBDC800C159C7"
+            BuildableName = "App.app"
+            BlueprintName = "App"
+            ReferencedContainer = "container:App.xcodeproj">
+         </BuildableReference>
+      </Buildables>
    </TestAction>
    <LaunchAction
-      buildConfiguration = "Debug"
+      buildConfiguration = "Release"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
-      selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
+      selectedLaunchConfiguration = "Release"
       launchStyle = "0"
       useCustomWorkingDirectory = "NO"
       ignoresPersistentStateOnLaunch = "NO"
@@ -40,26 +62,13 @@
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES">
       <BuildableProductRunnable
-         runnableDebuggingMode = "0">
-         <BuildableReference
-            BuildableIdentifier = "primary"
-            BlueprintIdentifier = "504EC3031FED79650016851F"
-            BuildableName = "App.app"
-            BlueprintName = "App"
-            ReferencedContainer = "container:App.xcodeproj">
-         </BuildableReference>
+         BuildableIdentifier = "primary"
+         BlueprintIdentifier = "50F6691D25AEBDC800C159C7"
+         BuildableName = "App.app"
+         BlueprintName = "App"
+         ReferencedContainer = "container:App.xcodeproj">
       </BuildableProductRunnable>
    </LaunchAction>
-   <ProfileAction
-      buildConfiguration = "Release"
-      shouldUseLaunchSchemeArgsEnv = "YES"
-      savedToolIdentifier = ""
-      useCustomWorkingDirectory = "NO"
-      debugDocumentVersioning = "YES">
-   </ProfileAction>
-   <AnalyzeAction
-      buildConfiguration = "Debug">
-   </AnalyzeAction>
    <ArchiveAction
       buildConfiguration = "Release"
       revealArchiveInOrganizer = "YES">
