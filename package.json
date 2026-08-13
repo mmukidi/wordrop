@@ -4,7 +4,7 @@
   "description": "Wordrop — Stack, Spell, & Survive. Modern Cyberpunk Word Puzzle Game.",
   "main": "game.js",
   "scripts": {
-    "build": "mkdir -p www && cp index.html style.css game.js dictionary.js audio.js privacy.html wordlist.txt www/ && cp -r assets www/ 2>/dev/null || true",
+    "build": "mkdir -p www && cp index.html style.css game.js dictionary.js audio.js analytics.js privacy.html wordlist.txt www/ && cp -r assets www/ 2>/dev/null || true",
     "cap:sync": "npm run build && npx cap sync ios",
     "cap:open": "npx cap open ios"
   },

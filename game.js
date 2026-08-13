@@ -5,6 +5,7 @@
 
 import { validator } from "./dictionary.js";
 import { audio } from "./audio.js";
+import { analytics } from "./analytics.js";
 
 // Global Production Error Catchers for Sentry.io
 window.addEventListener("error", (event) => {
@@ -20,6 +21,9 @@ window.addEventListener("unhandledrejection", (event) => {
         Sentry.captureException(event.reason);
     }
 });
+
+// Analytics Debug API — accessible from console for debugging/monitoring
+window.wordropAnalytics = null; // will be set after analytics import
 
 // Game Constants
 const GRID_COLS = 8;
@@ -1127,6 +1131,16 @@ async function initGame() {
     // Attach Event Listeners
     setupEventListeners();
 
+    // Expose Analytics API to window for console debugging
+    window.wordropAnalytics = {
+        summary: () => analytics.getSummary(),
+        recent: (count = 10) => analytics.getRecentGames(count),
+        export: (format = "json") => format === "csv" ? analytics.exportCSV() : analytics.exportJSON(),
+        clear: () => analytics.clearEvents(),
+        events: () => analytics.getAllEvents()
+    };
+    console.log("📊 Analytics available: type window.wordropAnalytics.summary() to see stats");
+
     // Sign into Game Center in the background — never blocks game start,
     // and is a total no-op on the website build (see gcPlugin()).
     gcAuthenticate();
@@ -1521,6 +1535,15 @@ function startGame({ keepScore = false } = {}) {
     // here (a real user gesture already happened to reach startGame(),
     // so the AudioContext is free to init) rather than at page load.
     audio.startAmbience();
+
+    // Analytics: track game start (mode, level)
+    if (!isLevel0) {
+        analytics.track("game_started", {
+            mode: isDailyMode ? "daily" : "endless",
+            level,
+            timestamp: new Date().toISOString()
+        });
+    }
 }
 
 function spawnTile(x, y, forcedLetter = null, isGlow = false, burstValue = null) {
@@ -2072,6 +2095,13 @@ function triggerHint() {
     matches.sort((a, b) => b.tiles.length - a.tiles.length);
     const targetMatch = matches[0];
 
+    // Analytics: track hint used
+    analytics.track("power_up_used", {
+        type: "hint",
+        cost: 10,
+        revealed_word: targetMatch.word
+    });
+
     // Temporarily highlight word tiles for 3.5 seconds
     targetMatch.tiles.forEach(tile => {
         if (tile && tile.el) {
@@ -2147,6 +2177,13 @@ function triggerRowColumnBurst(glowTile, direction) {
     audio.playSlash();
     audio.playBurstPop();
     hapticImpact("Heavy"); // the big payoff moment deserves the big thump
+
+    // Analytics: track glow tile burst (direction, tiles cleared, bonus)
+    analytics.track("glow_tile_triggered", {
+        direction: direction,
+        tiles_cleared: line.length,
+        bonus_points: totalBonus
+    });
 
     // Level 0 hears about every meaningful player action, even ones no
     // current step gates on, so steps can be re-ordered without rewiring.
@@ -2232,6 +2269,19 @@ async function sliceClearWord(match) {
     }
 
     gcRecordWordCleared(scoreResult.word);
+
+    // Analytics: track word cleared (score, length, rarity count)
+    const rarityCount = match.tiles.filter(t => {
+        const tier = getRarityTier(t.value);
+        return tier.minValue >= 4; // Rare and above
+    }).length;
+    analytics.track("word_cleared", {
+        word: scoreResult.word,
+        score: scoreResult.score,
+        length: scoreResult.word.length,
+        rare_tiles: rarityCount,
+        is_glow_trigger: !!(glowTile && scoreResult.score >= glowTile.burstValue)
+    });
 
     // Level 0: a real word clear is the gate for the swipe/spell steps.
     level0Notify("wordCleared");
@@ -2442,15 +2492,25 @@ function triggerVortex() {
     audio.playBurstPop();
     triggerScreenShake();
 
+    // Count tiles cleared for analytics
+    let tilesCleared = 0;
     // Vaporize bottom row (y=0)
     for (let x = 0; x < GRID_COLS; x++) {
         const tile = grid[0][x];
         if (tile && tile.el) {
+            tilesCleared++;
             spawnTileSparks(tile);
             grid[0][x] = null;
             tile.el.remove();
         }
     }
+
+    // Analytics: track vortex used
+    analytics.track("power_up_used", {
+        type: "vortex",
+        cost: 25,
+        tiles_cleared: tilesCleared
+    });
 
     showWordClearPopup("🔥 VORTEX CLEAR!", { el: boardEl });
 
@@ -2647,6 +2707,12 @@ async function triggerShuffle() {
         }
 
         if (tilesList.length === 0) return;
+
+        // Analytics: track shuffle used
+        analytics.track("power_up_used", {
+            type: "shuffle",
+            tiles_on_board: tilesList.length
+        });
 
         // Clear matrix references
         grid = Array(GRID_ROWS).fill(null).map(() => Array(GRID_COLS).fill(null));
@@ -3080,6 +3146,17 @@ function triggerGameOver() {
     finalScoreEl.textContent = score.toLocaleString();
     finalLevelEl.textContent = level;
     finalWordsCountEl.textContent = wordsClearedCount;
+
+    // Analytics: track game over (final score, level reached, words cleared)
+    if (!isLevel0) {
+        analytics.track("game_over", {
+            final_score: score,
+            final_level: level,
+            words_cleared: wordsClearedCount,
+            longest_word: longestWordSpelled,
+            mode: isDailyMode ? "daily" : "endless"
+        });
+    }
 
     // Daily Challenge: record the finished run (streak counts once/day,
     // best score updates on replays) and surface it on the overlay.
