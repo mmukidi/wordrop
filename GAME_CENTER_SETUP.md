@@ -11,6 +11,21 @@ Done via screen control and verified by reading `project.pbxproj` directly:
 `Sources` build phase (`GameCenterPlugin.swift in Sources`), and Target
 Membership shows **App — Default** in the file inspector.
 
+**Correction (2026-08-15):** being compiled into the target was not enough —
+GAMER STATS kept showing "Not available on web" for Game Center even in the
+native build, while Haptics showed ready. Root cause: Capacitor's bridge
+only auto-discovers plugins that arrive as an SPM package product (that's
+how `Capacitor`, `Cordova`, and the four `CapacitorHaptics`/etc. products in
+`CapApp-SPM` get wired up). `GameCenterPlugin.swift` is a loose source file
+in the App target, not a package product, so it was never auto-registered.
+Fixed by adding `ios/App/App/MainViewController.swift`, a
+`CAPBridgeViewController` subclass that calls
+`bridge?.registerPluginInstance(GameCenterPlugin())` in `capacitorDidLoad()`,
+and pointing `Main.storyboard`'s root view controller at it instead of the
+stock `CAPBridgeViewController`. If any other app-local (non-SPM) plugin is
+added later, it needs the same explicit `registerPluginInstance` call in
+that same override.
+
 ## 2. Enable the Game Center capability — DONE (2026-07-31)
 
 Done via screen control (Signing & Capabilities → +Capability → Game
